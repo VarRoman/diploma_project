@@ -179,6 +179,7 @@ cython_debug/
 .idea/deployment.xml
 .idea/sshConfigs.xml
 .idea/webServers.xml
+.idea/misc.xml
 .idea/
 .idea/**/tasks.xml
 .idea/**/usage.statistics.xml

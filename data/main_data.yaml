@@ -1,9 +1,9 @@
-train: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26/train/images,
-        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/train/images]
-val: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26/valid/images,
-        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/valid/images]
-test: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26/test/images,
-        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/test/images]
+train: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/train/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/train/images,]
+val: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/valid/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/valid/images,]
+test: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/test/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/test/images,]
 
 nc: 1
 names: ['volleyball']
