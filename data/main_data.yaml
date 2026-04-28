@@ -1,9 +1,32 @@
-train: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/train/images,
-        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/train/images,]
-val: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/valid/images,
-        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/valid/images,]
-test: [/home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/test/images,
-        /home/var-roman/Desktop/my_projects/diploma_project/data/vv_dataset_only_ball.v2i.yolo26/test/images,]
+train: [
+        /home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/train/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/pasha_v1/train/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/Volleyball_5_extra/train/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/Volleyball_Tracker_v3/train/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_v1_extra_2/train/images,
+#        /home/var-roman/Desktop/my_projects/diploma_project/data/rostik_v1/train/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/rostik_v2/train/images
+]
+
+val: [
+        /home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/valid/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/pasha_v1/valid/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/Volleyball_5_extra/valid/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/Volleyball_Tracker_v3/valid/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_v1_extra_2/valid/images,
+#        /home/var-roman/Desktop/my_projects/diploma_project/data/rostik_v1/valid/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/rostik_v2/valid/images
+]
+
+test: [
+        /home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_detection.yolo26_second/test/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/pasha_v1/test/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/Volleyball_5_extra/test/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/Volleyball_Tracker_v3/test/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/volleyball_v1_extra_2/test/images,
+#        /home/var-roman/Desktop/my_projects/diploma_project/data/rostik_v1/test/images,
+        /home/var-roman/Desktop/my_projects/diploma_project/data/rostik_v2/test/images
+]
 
 nc: 1
 names: ['volleyball']

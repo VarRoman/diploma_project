@@ -12,7 +12,7 @@ from ultralytics import YOLO
 import albumentations as A
 
 
-main_model = YOLO('yolo26m.pt')
+main_model = YOLO('../parsing_datasets_scripts/yolo26m.pt')
 
 custom_transforms = [
     A.MotionBlur(blur_limit=(7, 15), p=0.4),
