@@ -28,7 +28,7 @@ def calibrate_camera(pts_3d, pts_2d, camera_matrix, dist):
     success, rvec, tvec = cv2.solvePnP(pts_3d, pts_2d, camera_matrix, dist, flags=cv2.SOLVEPNP_ITERATIVE)
 
     if not success:
-        raise ValueError("solvePnP не зміг знайти рішення! Перевір порядок точок.")
+        raise ValueError("solvePnP не зміг знайти рішення, треба перевірити порядок точок")
 
     R, _ = cv2.Rodrigues(rvec)
 
