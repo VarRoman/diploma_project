@@ -9,8 +9,8 @@ from ultralytics import YOLO
 pts_real_3d = np.array([
     [0.0, 0.0, 0.0],
     [9.0, 0.0, 0.0],
-    [9.0, 18.0, 0.0],
-    [0.0, 18.0, 0.0]],dtype=np.float32)
+    [9.0, 0.0, 18.0],
+    [0.0, 0.0, 18.0]],dtype=np.float32)
 
 pts_video_2d = np.array([
     [73, 1031],
