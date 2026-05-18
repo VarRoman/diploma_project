@@ -1,0 +1,25 @@
+\documentclass[%
+  ukrainian, utf8, columnvii, simple,
+  hpadding=10mm, vpadding=10mm, reduceheight=2mm,
+  floatsection,
+]{eskdtext}
+
+
+\input{common/packages}  % Пакеты общие для диссертации и автореферата
+\input{common/preamble}
+
+\stampDocName{\TZtranscript}
+\stampDocId{\TZid}{\TZ}
+
+
+\begin{document}
+
+\pagenumbering{gobble}
+\maketitle
+\pagenumbering{arabic}
+
+\tableofcontents
+\newpage
+\input{sections/tech-task}
+
+\end{document}

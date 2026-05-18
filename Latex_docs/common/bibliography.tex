@@ -1,0 +1,21 @@
+\usepackage{csquotes}
+
+\usepackage[%
+style=gost-numeric,
+language=autobib,
+autolang=hyphen,
+clearlang=true,
+sortcites=true,
+sorting=none,
+]{biblatex}
+
+\DefineBibliographyStrings{ukrainian}{%
+  mediaeresource = {електронний ресурс},
+}
+
+\DeclareFieldFormat{url}{Режим доступу до ресурсу: \href{#1}{#1}}
+\DeclareFieldFormat{doi}{DOI: \href{https://doi.org/#1}{#1}}
+
+\toggletrue{bbx:gostbibliography}
+
+\addbibresource{bibliography.bib}

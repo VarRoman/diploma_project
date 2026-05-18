@@ -1,0 +1,31 @@
+\documentclass[%
+  ukrainian, utf8, columnvii, simple,
+  hpadding=10mm, vpadding=10mm, reduceheight=2mm,
+  floatsection,
+]{eskdtext}
+
+
+\input{common/packages}  % Пакеты общие для диссертации и автореферата
+\input{common/preamble}
+
+\stampDocName{\PZtranscript}
+\stampDocId{\PZid}{\PZ}
+
+
+\begin{document}
+
+\pagenumbering{gobble}
+\maketitle
+\pagenumbering{arabic}
+
+\tableofcontents
+
+
+\input{sections/glossary}
+\input{sections/introduction}
+\input{sections/chapter1}
+%\input{sections/chapter2}
+\input{sections/conclusion}
+\input{sections/bibliography}
+
+\end{document}

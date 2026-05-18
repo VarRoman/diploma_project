@@ -1,0 +1,170 @@
+	\documentclass[%
+  ukrainian, utf8, columnvii, simple%, reduceheight=2mm,
+]{eskdtab}
+
+\input{common/preamble}
+
+\usepackage{eskdlang}
+\usepackage{eskdstamp}
+\usepackage{rotating}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{makecell}
+
+
+\usepackage{multirow}
+\usepackage{vwcol}
+\usepackage{multicol}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{setspace}
+
+\newcommand{\point}{\textcolor{white}{.}}
+
+\makeatletter
+
+\newcommand{\ESKDdrawSpecification}{
+  \put(\ESKDltu{\ESKDframeX},\ESKDltu{\ESKDframeY}){%
+    \begin{picture}(0,0)
+    \ESKD@tmpdimb=\ESKDframeH
+    \ESKD@tmpdima=\ESKD@style@sh@formII
+    \ESKD@tmpdimc=8mm
+    \advance\ESKD@tmpdimb -\ESKD@tmpdima
+    \advance\ESKD@tmpdimb -15mm
+    \divide\ESKD@tmpdimb by \ESKD@tmpdimc
+    \ESKD@tmpcnta=\ESKD@tmpdimb
+    \ESKD@tmpdimb=\ESKD@tmpdimc
+    \multiply\ESKD@tmpdimb by \ESKD@tmpcnta
+    \advance\ESKD@tmpdimb 15mm
+    \ESKD@tmpdima=\ESKDframeH
+    \advance\ESKD@tmpdima -\ESKD@tmpdimb
+    \linethickness{\ESKDlineThick}
+    \put(7,\ESKDltu{\ESKD@tmpdima}){\line(0,1){\ESKDltu{\ESKD@tmpdimb}}}
+    \put(17,\ESKDltu{\ESKD@tmpdima}){\line(0,3){\ESKDltu{\ESKD@tmpdimb}}}
+    \put(65,\ESKDltu{\ESKD@tmpdima}){\line(0,1){\ESKDltu{\ESKD@tmpdimb}}}
+    \put(122,\ESKDltu{\ESKD@tmpdima}){\line(0,1){\ESKDltu{\ESKD@tmpdimb}}}
+    \put(142,\ESKDltu{\ESKD@tmpdima}){\line(0,1){\ESKDltu{\ESKD@tmpdimb}}}
+    \put(164,\ESKDltu{\ESKD@tmpdima}){\line(0,1){\ESKDltu{\ESKD@tmpdimb}}}
+    \ESKD@tmpdimb=\ESKDframeH
+    \advance\ESKD@tmpdimb -15mm
+    \put(0,\ESKDltu{\ESKD@tmpdimb}){\line(1,0){\ESKDltu{\ESKDframeW}}}
+    \linethickness{\ESKDlineThin}
+    \multiput(0,\ESKDltu{\ESKD@tmpdima})(0, 8){\the\ESKD@tmpcnta}{%
+      \line(1,0){\ESKDltu{\ESKDframeW}}}
+    \end{picture}}}
+
+\newcommand{\ESKDfontTabBase}{\gostfont\fontsize{12pt}{14pt}\selectfont\slshape}
+%\newcommand{\ESKDfontTabBase}{\fontsize{14pt}{16pt}\selectfont}
+\renewcommand{\ESKDfontTabHead}{\ESKDfontTabBase}
+\renewcommand{\ESKDfontTabBody}{\ESKDfontTabBase}
+
+\newenvironment{ESKDspecification}{%
+\ESKDputOnStyle{formII}{specification}{\ESKDdrawSpecification}
+\ESKDputOnStyle{formIIab}{specification}{\ESKDdrawSpecification}
+\begin{ESKDzeroPadding}%
+\setlength{\tabcolsep}{0.5mm}%
+\setlength{\LTpre}{0mm}%
+\setlength{\LTpost}{0mm}%
+\setlength{\LTleft}{0mm}%
+\setlength{\LTright}{\fill}%
+\newcolumntype{s}{>{\ESKDfontTabBody}c}%
+\newcolumntype{n}{>{\parbox[c][8mm][c]{3mm}{%
+  \rule{0mm}{0mm}}\ESKDfontTabBody}l}%
+\noindent%
+\begin{longtable}{sssnsss}
+\endhead}{%
+\end{longtable}%
+\end{ESKDzeroPadding}%
+\ESKDremoveFromStyle{formII}{spec}%
+\ESKDremoveFromStyle{formIIab}{spec}
+}
+
+\makeatother
+
+\stampDocName{\OAtranscript}
+\stampDocId{\OAid}{\OA}
+
+\begin{document}
+
+\begin{ESKDspecification}
+\bgroup
+\def\arraystretch{1.2}%  1 is the default, change whatever you need
+%\rule{0pt}{12mm} 
+\begin{tabular}{@{} >{\centering}m{0.1cm}@{}>{\centering}p{1.1cm}>{\centering}m{4.5cm}>{\centering}m{5.7cm}>{\centering}m{1.8cm}>{\centering}m{2.2cm}>{\centering}m{2cm}}
+
+\multicolumn{1}{c}{\multirow{-1.4}{*}{\centering \begin{sideways} \;Довідки\end{sideways}}}& \multicolumn{1}{c}{\multirow{-1.4}{*}{\centering \begin{sideways}Формат\end{sideways}}} & \multicolumn{1}{c}{\multirow{-1}{*}{\centering Позначення}}  & \multicolumn{1}{c}{\multirow{-1}{*}{\centering Найменування}} & \multicolumn{1}{c}{\multirow{-2}{*}{\centering Кільк.}} & \multicolumn{1}{c}{\multirow{-2}{*}{\centering №}} & \multicolumn{1}{c}{\multirow{-1}{*}{\centering Додаток}} \tabularnewline
+
+& & & &\multicolumn{1}{c}{\multirow{-2.4}{*}{\centering листів}} & \multicolumn{1}{c}{\multirow{-2.4}{*}{\centering екземпляра}} & \tabularnewline
+
+%----- Завдання на дипломний проект -----%   
+& A4 &                    & Завдання на дипломний проект & 2 & & \tabularnewline
+
+%----- Опис альбому -----%   
+\rule{0pt}{18mm}
+\point  & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.5}{*}{\theStampCode.\OAid\ \OA}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering 1}} &  & \tabularnewline
+ & & & \multicolumn{1}{c}{\multirow{-2}{*}{\centering \OAtranscript}} & & & \tabularnewline
+ 
+%----- Технічне завдання -----%   
+\rule{0pt}{12mm}
+\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\TZid\ \TZ}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering 1}} &  & \tabularnewline
+ & & & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering \TZtranscript}} & & & \tabularnewline
+ 
+ %----- Пояснювальна записка -----%   
+\rule{0pt}{12mm}
+\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\PZid\ \PZ}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering 1}} &  & \tabularnewline
+ & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \PZtranscript}} & & & \tabularnewline
+   
+ %----- Принципова схема -----%   
+\rule{0pt}{15mm}
+\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\PSid\ \PS}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering 1}} &  & \tabularnewline
+ & & & \multicolumn{1}{c}{\multirow{-2}{*}{\centering \PStranscript}} & & & \tabularnewline
+ 
+%----- Структурна схема -----%   
+\rule{0pt}{15mm}
+\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\SSid\ \SSh}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering 1}} &  & \tabularnewline
+ & & & \multicolumn{1}{c}{\multirow{-2}{*}{\centering \SStranscript}} & & & \tabularnewline
+
+ 
+ 
+ 
+\end{tabular}
+ \egroup
+
+\end{ESKDspecification}
+
+
+
+
+
+%\begin{ESKDspecification}
+%   & A4 &                    & Завдання на дипломний проект & 1 & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.001 ТП & Відомість проекту & 1 & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.002 ТЗ & ПРОТОКОЛ ВЗАЄМОДІЇ & 1 & & \\
+%    &    &                    & КОМПОНЕНТІВ ІС ВНЗ & & & \\
+%    &    &                    & Технічне завдання & & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.003 ПЗ & ПРОТОКОЛ ВЗАЄМОДІЇ & 60 & & \\
+%    &    &                    & КОМПОНЕНТІВ ІС ВНЗ & & & \\
+%    &    &                    & Пояснювальна записка & & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.004 ОП & ПРОТОКОЛ ВЗАЄМОДІЇ & 65 & & \\
+%    &    &                    & КОМПОНЕНТІВ ІС ВНЗ & & & \\
+%    &    &                    & Опис програми & & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.005 Д1 & ПРОТОКОЛ ВЗАЄМОДІЇ & 2 & & \\
+%    &    &                    & КОМПОНЕНТІВ ІС ВНЗ & & & \\
+%    &    &                    & Діаграма класів & & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.006 Д2 & \parbox{5cm}{\MakeUppercase\thesisTitle} & 2 & & \\
+%    &    &                    & Діаграма переходів & & & \\
+%    &    &                    & між станами з'єднання & & & \\
+%    &    &                    & & & & \\
+%   & A4 & ІАЛЦ.467100.007 Д3 & \parbox{5cm}{\MakeUppercase\thesisTitle} & 2 & & \\
+%%    &    &                    & КОМПОНЕНТІВ ІС ВНЗ & & & \\
+%%    &    &                    & Блок-схема алгоритму обробки & & & \\
+%%    &    &                    & захищеного повідомлення & & & \\
+%\end{ESKDspecification}
+
+\end{document}

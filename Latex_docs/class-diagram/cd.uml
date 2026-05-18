@@ -1,0 +1,252 @@
+@startuml
+
+class Connection {
+  + username: String
+  + session: Session
+  + application: Application
+  + remoteProxies: Map<string, RemoteProxy>
+  - id: Number
+  - client: Client
+  - server: Server
+  - transport: Transport
+  --
+  + callMethod(interfaceName, methodName, args, callback)
+  + emitRemoteEvent(interfaceName, eventName, args)
+  + handshake(app, login, password, callback)
+  + inspectInterface(interfaceName, callback)
+  + ping(callback)
+  + pong(messageId)
+  + startHeartbeat(interval)
+  + stopHeartbeat()
+  + getTransport()
+  + close()
+  - _callback(messageId, error, result)
+}
+
+class Application {
+  + name: String
+  + version: String
+  - api: Map<String, Map<String, Function>>
+  - eventHandlers: Map<String, Function>
+  --
+  + callMethod(connection, interfaceName, methodName, args, callback)
+  + getMethods(interfaceName): [String]
+  + handleEvent(connection, interfaceName, eventName, args)
+}
+
+interface SessionStorageProvider {
+  * get(sessionId): Session
+  * set(sessionId, Session)
+  * isAsync()
+  * setInactive(sessionId)
+}
+
+class SimpleSessionStorageProvider {
+
+}
+
+abstract class Server {
+  + heartbeatInterval: number
+  + authenticate: AuthPolicy
+  + clients: Map<Number, Connection>
+  + clientsBySessionId: Map<Number, Connection>
+  + sessionStorage: SessionStorageProvider
+  --
+  + getClients(): Iterator<Connection>
+  + getClientsArray(): [Connection]
+  + updateApplication(application)
+  + updatConnectionsApi()
+  + broadcast(interfaceName, eventName, ...args)
+  + startSession(connection, application, strategy, credentials, callback)
+  + restoreSession(connection, application, credentials, callback)
+}
+
+class NetServer {
+
+}
+class TlsServer {
+
+}
+class WsServer {
+
+}
+class WssServer {
+
+}
+
+interface AuthPolicy {
+  + authenticate(connection, application, strategy, credentials, callback)
+}
+
+class Client {
+  + application: Application
+  * connectPolicy: ConnectPolicy
+  * heartbeatInterval: Number
+  * session: Session
+}
+
+interface ConnectPolicy {
+  * connect(app, connection, session, callback)
+}
+
+class Session {
+  + id: Number
+  + connection: Connection
+  + username: String
+  + guaranteedDeliveredCount: Number
+  + receivedCount: Number
+  + latestBufferedMessageId: Number
+  --
+  + toString(): String
+  + fromString(): String
+}
+
+interface Transport {
+  + getRawTransport(): Socket
+  + send(data)
+  + end(data)
+}
+
+class NetTransport {
+  + getRawTransport(): net.Socket
+  + send(data)
+  + end(data)
+}
+
+class TlsTransport {
+  + getRawTransport(): tls.Socket
+  + send(data)
+  + end(data)
+}
+
+class WsTransport {
+  + getRawTransport(): ws.Socket
+  + send(data)
+  + end(data)
+}
+
+class WssTransport {
+  + getRawTransport(): wss.Socket
+  + send(data)
+  + end(data)
+}
+
+class RemoteProxy {
+  - connection: Connection
+  - interfaceName: String
+  --
+  + emit(eventName, ...eventArgs)
+  + [method](...args, callback)
+}
+
+class RemoteError {
+  + code: Number
+  + message: String
+  + stack: String
+  --
+  + toJstpArray(): [String]
+}
+
+class Serde {
+  + parse(string): Object
+  * stringidy(onject): String
+}
+
+interface EventEmitter {
+  + on(event, function)
+  + emit(event, ...args)
+}
+
+class Map {
+  + get(key)
+  * set(key, value)
+}
+
+class net.Server {
+
+}
+
+class net.Socket {
+
+}
+
+class tls.Server {
+
+}
+
+class tls.Socket {
+
+}
+
+class ws.Server {
+
+}
+
+class ws.Socket {
+
+}
+
+class wss.Server {
+
+}
+
+class wss.Socket {
+
+}
+
+EventEmitter <|-- Connection
+EventEmitter <|-- Server
+EventEmitter <|-- RemoteProxy
+EventEmitter <|-- Transport
+
+Connection *-- Transport
+Connection *-- "0..n" RemoteProxy
+Connection "0..1" - "0..1" Client
+Connection o-- Application
+Connection "0..n" - "0..1" Server
+Connection "1" - "1" Session
+Connection --- RemoteError : create
+Connection --- Serde : use
+
+Application o-- SessionStorageProvider
+
+Server o-- Application
+Server o-- SessionStorageProvider
+Server *-- AuthPolicy
+
+Client - Application
+Client - ConnectPolicy
+Client - Session
+
+Map <|.. Session
+Map <|.. SimpleSessionStorageProvider
+
+SessionStorageProvider <|.. SimpleSessionStorageProvider
+SimpleSessionStorageProvider o-- "0..n" Session
+
+
+Server <|-- NetServer
+net.Server <|-- NetServer
+
+Server <|-- TlsServer
+tls.Server <|-- TlsServer
+
+Server <|-- WsServer
+ws.Server <|-- WsServer
+
+Server <|-- WssServer
+wss.Server <|-- WssServer
+
+Transport <|.. NetTransport
+net.Socket o-- NetTransport
+
+Transport <|.. TlsTransport
+tls.Socket o-- TlsTransport
+
+Transport <|.. WsTransport
+ws.Socket o--  WsTransport
+
+Transport <|.. WssTransport
+wss.Socket o-- WssTransport
+
+@enduml

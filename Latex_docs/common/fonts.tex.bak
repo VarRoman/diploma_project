@@ -1,0 +1,17 @@
+\usepackage{fontspec}
+\usepackage{xecyr}
+\usepackage{xunicode}
+\usepackage{xltxtra}
+%\usepackage{setspace}
+
+\defaultfontfeatures{Ligatures=TeX}
+
+\setmainfont{Times New Roman}
+\newfontfamily\gostfont{opengost-type-b.otf}[AutoFakeSlant=0.26,Scale=MatchLowercase]
+
+\renewcommand{\ESKDfontSetBaseLineStretch}{%
+  \renewcommand{\baselinestretch}{\ESKDfontBaseLineStretch}
+  \hspace{-1mm}\gostfont}
+
+\linespread{1.5} % 1.5 spacing everywhere
+% \setstretch{1.5}   % 1.5 spacing where it is sensible (e.g., not in footnotes)

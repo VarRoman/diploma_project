@@ -1,0 +1,51 @@
+\documentclass[%
+  ukrainian, utf8, columnvii, simple,
+  hpadding=10mm, vpadding=10mm, reduceheight=2mm,
+  floatsection,
+]{eskdtext}
+
+
+\input{common/packages}
+\input{common/preamble}
+
+%\renewcommand{\ESKDfontVsize}{\fontsize{14pt}{16pt}}
+\stampDocName{\fontsize{14pt}{16pt}\selectfont{}%
+\PStranscript}
+\stampDocId{\PSid}{\PS}
+
+\begin{document}
+\pagenumbering{gobble}
+\maketitle
+\pagenumbering{arabic}
+
+\begin{figure}[p]
+  \centering
+
+  \begin{tikzpicture}[node distance=3cm, font=\gostfont\small]
+    \node (start) [flow:startstop] {Початок};
+    \node (input) [flow:io, below of=start] {%
+      Отримане повідомлення, секретний ключ сесії};
+    \node (headers) [flow:process, below of=input] {Проаналізувати відкриті заголовки};
+    \node (branch-on-headers) [flow:decision, below of=headers, yshift=-1.5cm] {%
+      Повідомлення потребує обробки?};
+    \node (decrypt) [flow:process, right of=headers, xshift=2cm] {%
+      Перевірка \gls{MAC} і дешифрування повідомлення};
+    \node (branch-on-crypto) [flow:decision, right of=decrypt, xshift=2cm] {%
+      Операція успішна?};
+    \node (output) [flow:io, below of=branch-on-crypto, yshift=-1.5cm] {%
+      Дешифроване повідомлення};
+    \node (stop) [flow:startstop, below of=branch-on-headers, yshift=-1.5cm] {Кінець};
+
+    \draw [flow:arrow] (start) -- (input);
+    \draw [flow:arrow] (input) -- (headers);
+    \draw [flow:arrow] (headers) -- (branch-on-headers);
+    \draw [flow:arrow] (branch-on-headers) -- node[anchor=east] {ні} (stop);
+    \draw [flow:arrow] (branch-on-headers) -| node[anchor=south, pos=0.25] {так} (decrypt);
+    \draw [flow:arrow] (decrypt) -- (branch-on-crypto);
+    \draw [flow:arrow] (branch-on-crypto.east) -- node[anchor=south] {ні} +(1,0) |- (stop);
+    \draw [flow:arrow] (branch-on-crypto) -- node[anchor=east] {так} (output);
+    \draw [flow:arrow] (output) |- (stop);
+  \end{tikzpicture}
+\end{figure}
+
+\end{document}

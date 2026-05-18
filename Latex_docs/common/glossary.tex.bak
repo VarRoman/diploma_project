@@ -1,0 +1,30 @@
+\usepackage[toc,nopostdot,nogroupskip,numberedsection=nolabel]{glossaries-extra}
+
+\makeglossaries
+
+\newabbreviation{TCP}{TCP}{%
+  (Transmission Control Protocol)
+  Протокол управління передачею даних}
+\newabbreviation{TLS}{TLS}{%
+  (Transport Layer Security Protocol)
+  Протокол безпеки транспортного рівня}
+\newabbreviation{RPC}{RPC}{%
+  (Remote Procedure Call)
+  Виклик віддалених процедур}
+\newabbreviation{AEAD}{AEAD}{%
+  (Authenticated Encryption with Associated Data)
+  Аутентифіковане шифрування з приєднаними даними}
+\newabbreviation{MAC}{MAC}{%
+  (Message Authentication Code)
+  Код аутентифікації повідомлення}
+\newabbreviation{HTTP}{HTTP}{%
+  (Hyper Text Transfer Protocol)
+  Протокол передачі гіпертексту}
+\newabbreviation{SOAP}{SOAP}{%
+  (Simple Object Access Protocol)
+  Простий протокол доступу до об'єктів}
+
+\glsfindwidesttoplevelname
+\setglossarystyle{super3col}
+\setlength{\glsdescwidth}{.83\textwidth}
+\setabbreviationstyle{short-nolong}

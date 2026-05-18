@@ -1,0 +1,28 @@
+\documentclass[%
+  ukrainian, utf8, columnvii, simple,
+  hpadding=10mm, vpadding=10mm, reduceheight=2mm,
+  floatsection,
+]{eskdtext}
+
+% \usepackage[subpreambles=true]{standalone}
+\usepackage{eskddstu}
+\input{common/preamble}
+\usepackage{graphicx}
+
+\stampDocName{\FStranscript}
+\stampDocId{\FSid}{\FS}
+
+\begin{document}
+
+\pagenumbering{gobble}
+\maketitle
+\pagenumbering{arabic}
+
+% \include{class-diagram/cd}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[angle=90,origin=c,height=15cm]{class-diagram/cd.pdf}
+\end{figure}
+
+\end{document}

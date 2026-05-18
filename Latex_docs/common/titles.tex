@@ -1,0 +1,40 @@
+\usepackage[nobottomtitles*]{titlesec}
+\usepackage{titletoc}
+
+\titleformat{\section}[display]
+  {\filcenter\bfseries\fontsize{18pt}{22pt}\selectfont}
+  {\MakeUppercase{\chaptername} \thesection}
+  {0pt}
+  {\MakeUppercase}[]
+
+\titlespacing{\section}{0pt}{1em plus 0.3em minus 0.06em}{1.5em plus 0.15em}
+\newcommand{\sectionbreak}{\clearpage}
+
+\titleformat{\subsection}[hang]
+  {\bfseries\fontsize{16pt}{19pt}\selectfont}
+  {\thesubsection}
+  {1em}{}[]
+
+\titlespacing{\subsection}{\parindent}{1em plus 0.3em minus 0.06em}{1em plus 0.1em}
+
+\titleformat{\subsubsection}[hang]
+  {\bfseries}
+  {\thesubsubsection}
+  {1em}{}[]
+
+\titlespacing{\subsubsection}{\parindent}{1em plus 0.3em minus 0.06em}{1em plus 0.1em}
+
+\titleformat{\paragraph}[hang]
+  {\bfseries}
+  {\thesubsubsection}
+  {1em}{}[]
+
+\titlespacing{\paragraph}{\parindent}{1em plus 0.3em minus 0.06em}{1em plus 0.1em}
+
+\setcounter{secnumdepth}{3}
+
+\newenvironment{unnumbered}{%
+  \setcounter{secnumdepth}{0}
+}{%
+  \setcounter{secnumdepth}{3}
+}

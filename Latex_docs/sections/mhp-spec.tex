@@ -1,0 +1,629 @@
+Metarhia Protocol являє собою протокол взаємодії мережевих додатків і їх
+компонентів, що надає можливості для двостороннього асинхронного обміну даними,
+мультиплексування багатьох паралельних каналів стрімінгу даних,
+\gls{RPC}-викликів та потоків подій, на які можна підписуватися, і може прозоро
+для прикладного коду обробляти короткочасні обриви з'єднання, повністю
+відновлюючи сесію. Також він реалізує механізм аутентифікації з'єднань,
+опціональне стиснення даних і підтримує різні формати серіалізації даних.
+
+\subsubsection{Визначення}
+
+Розглянемо назви сутностей та абстракцій, що використовуються в даній специфікації
+та програмному коді, що її реалізує.
+
+\emph{Transport} (<<транспорт>>) --- транспортний протокол або інший механізм
+коммунікації, що надає повнодуплексне двостороннє з'єднання з гарантіями
+доставки та збереження порядку відправлення даних на приймаючій стороні, і
+якому Metarhia Protocol делегує низькорівневу передачу потоків бінарних даних.
+
+\emph{Transport connection} (<<транспортне з'єднання>>) --- сокет, з'єднання,
+або інший специфічний для транспорту канал комунікації.
+
+\emph{Metarhia Protocol connection} (або просто \emph{connection} без уточнень
+--- <<з'єднання>>) --- абстракція над з'єднанням транспортного протоколу, що
+управляється реалізацією Metarhia Protocol, яка приховує деталі реалізації
+транспорту та надає функціональність прикладного протоколу користувачеві (тобто
+розробнику прикладних додатків). Одному з'єднанню Metarhia Protocol відповідає
+одне основне транспортне з'єднання (що використовується для \gls{RPC}), проте
+реалізація Metarhia Protocol може за необхідності внутрішньо відкривати
+додаткові з'єднання.
+
+\emph{Chunk} (буквально <<шматок>>) --- одиниця даних протоколу Metarhia
+Protocol, що складається з заголовків і опціонального навантаження (payload).
+Всі дані, що передаються протоколом, розбиваються на чанки.
+
+\emph{Channel} (<<канал>>) --- це множина чанків, що передаються через певне
+з'єднання та ідентифікуються серед інших певним числовим значенням, що є
+унікальним серед активних каналів цього з'єднання. Канали надають
+функціональність мультиплексування паралельних потоків даних.
+
+\emph{Message} (<<повідомлення>>) --- це канал, що характеризується коротким
+часом існування і невеликою та обмеженою кількістю чанків (більшість
+повідомлень не перевищують за обсягом один чанк), що буферизуються в пам'яті до
+повного отримання повідомлення, після чого обробляються як єдине ціле. До
+повідомлень відносяться \gls{RPC}-виклики та віддалені події.
+
+\emph{Stream} (<<потік>>) --- канал, що характеризується довільним часом
+існування (обмеженим лише часом існування самого з'єднання) та невизначеною
+кількістю чанків, дані яких обробляються прикладним кодом одразу по мірі
+доступності.
+
+\emph{Session} (<<сесія>>) --- стійка асоціація між додатками на обох кінцях
+з'єднання. Сесії можуть бути анонімними та аутентифікованими.  Канали є
+прив'язаними до відповідних сесій.
+
+\emph{Tunnel} (<<тунель>>) --- набір сесій і каналів, що належать з'єднанню.
+Ця абстракція реалізує прозоре перепідключення в разі втрати транспортного
+з'єднання.
+
+Ключові слова \emph{<<повинні>>}, \emph{<<слід>>}, \emph{<<можуть>>} і
+\emph{<<опціонально>>} в цьому підрозділі відповідають англомовним аналогам
+<<MUST>>, <<SHOULD>>, <<MAY>> і <<OPTIONAL>> в тому сенсі, в якому вони
+визначені в RFC 2119~\cite{rfc2119}.
+
+\subsubsection{Підтримка транспортних протоколів}
+
+Реалізації Metarhia Protocol, що в основному націлені на використання в
+серверному оточенні, \emph{повинні} підтримувати протоколи \gls{TCP}
+(див.~\cite{rfc793}), \gls{TLS} (див.~\cite{rfc5246}), WebSocket
+(див.~\cite{rfc6455}) і WebSocket over \gls{TLS} в якості транспортних.
+Реалізації Metarhia Protocol, що призначені для використання в серверному
+оточенні, \emph{можуть} також підтримувати додаткові транспорти, наприклад,
+Unix domain сокети для міжпроцесної взаємодії в рамках фізичної машини за
+допомогою тих самих абстракцій (що особливо актуально для додатків з
+мікросервісною архітектурою).
+
+Реалізаціям Metarhia Protocol, що розроблені спеціально для використання
+клієнтськими додатками, за можливості \emph{слід} підтримувати транспортні
+протоколи \gls{TCP} і \gls{TLS}.  В тих випадках, коли це неможливо (наприклад,
+реалізації для веб-додатків, що виконуються в браузері), ці реалізації
+\emph{повинні} підтримувати транспортні протоколи WebSocket і WebSocket over
+\gls{TLS}, в іншому випадку підтримка WebSocket є \emph{опціональною}.  Іншими
+словами, принаймні одна з пар <<\gls{TCP} і \gls{TLS}>> або <<WebSocket і
+WebSocket over \gls{TLS}>> \emph{повинна} підтримуватися, з перевагою в бік
+\gls{TCP} і \gls{TLS}.  Клієнтські реалізації також \emph{можуть} підтримувати
+інші транспортні протоколи, якщо в цьому буде практичний сенс.
+
+\subsubsection{Стани з'єднання}
+
+Діаграма переходів між станами наведена в документі ІАЛЦ.467100.006~Д2.
+
+\paragraph{AWAITING\_HANDSHAKE}
+
+Транспортне з'єднання було відкрито, проте рукостискання (handshake) ще не відбулося
+і не була встановлена сесія.
+
+Клієнт надсилає чанк \emph{Protocol Handshake}. Коли рукостискання успішно
+завершується, з'єднання переходить в стан \emph{AWAITING\_TUNNEL}.
+
+Сервер очікує чанк \emph{Protocol Handshake} від клієнта. Коли рукостискання
+успішно завершується, з'єднання переходить в стан \emph{AWAITING\_TUNNEL}.
+
+\paragraph{AWAITING\_TUNNEL}
+
+Клієнт надсилає чанк \emph{Open Tunnel}. Сервер відповідає або чанком \emph{New
+Tunnel}, або, в разі відновлення з'єднання, чанком \emph{State
+Synchronization}, на який клієнт відповідає також чанком \emph{State
+Synchronization}, і обидві сторони обмінюються буферизованими даними, що не
+передавалися за період відсутності з'єднання. Після цього обидва з'єднання
+(тобто на стороні клієтського та серверного додатків) переходять у стан
+\emph{NORMAL}.
+
+\paragraph{NORMAL}
+
+Це основний режим роботи протоколу. Вся комунікація відбувається за рахунок
+каналів і чанків ping/pong. У випадку мережевої помилки з'єднання переходять у
+стан \emph{NETWORK\_CONN\_LOST}.
+
+\paragraph{NETWORK\_CONN\_LOST}
+
+Клієнт буферизує вихідні чанки та намагається перепідключитися до сервера.
+Якщо це вдається, то з'єднання переходить у стан \emph{AWAITING\_HANDSHAKE}.
+
+Сервер буферизує вихідні чанки та очікує нове з'єднання від клієнта.
+
+\subsubsection{Різновиди одиниць даних типу Chunk}
+
+Кожен чанк, що передається в стані з'єднання \emph{NORMAL}, починається з поля
+довжиною один октет, що вказує на тип чанка.  Це значення \emph{повинно} бути
+одним із наведених у таблиці~\ref{tbl:chunk-types}.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:chunk-types}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Назва типу & Значення першого октета \\
+      \hline
+      PING & 0 \\
+      \hline
+      PONG & 1 \\
+      \hline
+      MESSAGE\_PREAMBLE & 2 \\
+      \hline
+      STREAM\_PREAMBLE & 3 \\
+      \hline
+      DATA\_CHUNK & 4 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+\subsubsection{Формати одиниць даних типу Chunk}
+
+Зауваження: Metarhia Protocol використовує порядок байтів little-endian.
+
+\paragraph{Protocol Handshake}
+
+У таблиці~\ref{tbl:protocol-handshake} подано формат чанку <<Protocol Handshake>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-handshake}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      Version & 16 \\
+      \hline
+      Encryption & 16 \\
+      \hline
+      \multicolumn{2}{|l|}{Payload} \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Поле Version вказує на версію протоколу (тобто, 1). Єдиним можливим значенням
+поля Encryption на даний момент є 0, а Payload відсутній.
+
+Якщо в подальшому будуть додані інші значення поля Encryption, то вони також
+можуть вказувати на необхідність вибору сторонами складнішого процесу
+рукостискання (наприклад, для обміну ключами).
+
+\paragraph{Open Tunnel}
+
+У таблиці~\ref{tbl:protocol-opentunnel} подано формат чанку <<Open Tunnel>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-opentunnel}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      Token & 256 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Token --- ідентифікатор тунелю і його сесійний ключ, що служить для повторної
+аутентифікації при відновленні сесії.  Значення 0 має особливе значення і
+служить для створення нового тунелю замість існуючого.
+
+\paragraph{New Tunnel}
+
+У таблиці~\ref{tbl:protocol-newtunnel} подано формат чанку <<New Tunnel>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-newtunnel}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      Token & 256 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Token --- це отриманий з криптографічно стійкого джерела 32-байтний випадковий
+рядок, що служить ідентифікатором тунелю і його секретним ключем. Token не може
+бути рівним нулю.
+
+\paragraph{State Synchronization}
+
+У таблиці~\ref{tbl:protocol-statesync} подано формат чанку <<State Synchronization>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-statesync}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      LastPingId & 32 \\
+      \hline
+      ChunksCount & 32 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+LastPingId --- це ідентифікатор останнього Ping-чанку, що отримала сторона, що
+надіслала даний чанк State Synchronization. ChunksCount --- кількість чанків,
+що вона отримала з того моменту.
+
+\paragraph{Ping}
+
+У таблиці~\ref{tbl:protocol-ping} подано формат чанку <<Ping>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-ping}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      ChunkType & 8 \\
+      \hline
+      PingId & 32 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Значення ChunkType у Ping-чанків дорівнює константі PING (див.
+таблицю~\ref{tbl:chunk-types}). PingId --- ціле число, що монотонно зростає.
+
+\paragraph{Pong}
+
+У таблиці~\ref{tbl:protocol-pong} подано формат чанку <<Pong>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-pong}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      ChunkType & 8 \\
+      \hline
+      PingId & 32 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Значення ChunkType у Pong-чанків дорівнює константі PONG (див.
+таблицю~\ref{tbl:chunk-types}). PingId --- ідентифікатор відповідного чанку
+Ping.
+
+\paragraph{Channel Preamble}
+
+У таблиці~\ref{tbl:protocol-chan-preamble} подано загальну частину структури,
+що є першим чанком всіх каналів. Структури, що представляють перші чанки
+конкретних типів каналів --- Message Preamble
+(таблиця~\ref{tbl:protocol-msg-preamble}) і Stream Preamble, --- наслідують і
+розширяють її.
+
+Id і Compression --- загальні поля, що характерні для обох видів каналів.
+Структура Stream Preamble не містить додаткових полів, тому
+таблиця~\ref{tbl:protocol-chan-preamble}, фактично, описує її також.  Додаткові
+поля структури Message Preamble розміщуються на місці поля
+MessagePreambleReserved абстрактної структури Channel Preamble.
+
+Поле ChunkType структури Message Preamble дорівнює константі MESSAGE\_PREAMBLE,
+а поле ChunkType структури Stream Preamble дорівнює константі STREAM\_PREAMBLE
+(див. таблицю~\ref{tbl:chunk-types}).
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-chan-preamble}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      ChunkType & 8 \\
+      \hline
+      Id & 32 \\
+      \hline
+      Compression & 8 \\
+      \hline
+      MessagePreambleReserved & 16 \\
+      \hline
+      SessionId & 64 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Поле Id --- це ідентифікатор каналу в з'єднанні. Щоб уникнути необхідності
+синхронізувати лічильники на двох сторонах з'єднання і можливих колізій,
+старший біт поля Id маскується і завжди дорівнює 0 для каналів, створених
+клієнтом, і дорівнює 1 для каналів, створених сервером. Іншими словами, можна
+сказати, що дане поле є знаковим цілим числом, і коректними його значеннями для
+каналів, створених клієнтом, є $[0, 2^{31} - 1]$, а для каналів, створених
+сервером, --- $[{-2^{31}}, -1]$.
+
+Значення поля Id \emph{повинно} бути унікальним серед активних у момент часу
+каналів.
+
+Поле Compression вказує, чи є дані наступних чанків з даними цього каналу
+стисненими. Поле \emph{повинно} бути рівним одному із значень, поданих у
+таблиці~\ref{tbl:protocol-compression}.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-compression}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Значення поля Compression & Ефект \\
+      \hline
+      0 & Стиснення не використовується \\
+      \hline
+      1 & Дані стиснені алгоритмом GZip \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+SessionId --- це ідентифікатор сесії, в якій має бути відкритий канал.  Клієнт
+отримує його у відповідь на успішне рукостискання з додатком, тобто на
+повідомлення HandshakeRequest, або, іншими словами, авторизацію в ньому чи
+створення анонімної сесії.
+
+\paragraph{Message Preamble}
+
+У таблиці~\ref{tbl:protocol-msg-preamble} подано формат чанку <<Message Preamble>>.
+Див. також таблицю~\ref{tbl:protocol-chan-preamble}.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-msg-preamble}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      ChunkType & 8 \\
+      \hline
+      Id & 32 \\
+      \hline
+      Compression & 8 \\
+      \hline
+      Encoding & 8 \\
+      \hline
+      MessageType & 8 \\
+      \hline
+      SessionId & 64 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Ця структура розширює загальну Channel Preamble і додає на зарезервоване
+місце два нових поля: Encoding і MessageType.
+
+Поле Encoding вказує формат серіалізації складних структур даних (наприклад,
+аргументів \gls{RPC}-викликів у тілі повідомлень типу Call). Воно
+\emph{повинно} бути рівним одному із значень, вказаних у
+таблиці~\ref{tbl:protocol-encoding}.
+
+Поле MessageType вказує на тип повідомлення і має бути одним із значень,
+наведених у таблиці~\ref{tbl:protocol-msg-type}.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-encoding}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Значення поля Encoding & Формат серіалізації \\
+      \hline
+      0 & JSTP \\
+      \hline
+      1 & JSON \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-msg-type}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Значення поля MessageType & Тип повідомлення \\
+      \hline
+      0 & HandshakeRequest \\
+      \hline
+      1 & HandshakeResponse \\
+      \hline
+      2 & Event \\
+      \hline
+      3 & Call \\
+      \hline
+      4 & Callback \\
+      \hline
+      5 & Inspect \\
+      \hline
+      6 & InspectCallback \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+\paragraph{Data Chunk}
+
+У таблиці~\ref{tbl:protocol-data-chunk} подано формат чанку <<Data Chunk>>.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:protocol-data-chunk}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Поле & Кількість бітів \\
+      \hline
+      ChunkType & 8 \\
+      \hline
+      ChannelId & 32 \\
+      \hline
+      Length & 16 \\
+      \hline
+      Flags & 8 \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Поле ChunkType цієї структури дорівнює константі DATA\_CHUNK
+(див. таблицю~\ref{tbl:chunk-types}).
+
+Поле ChannelId указує на те, до якого каналу належить цей чанк з даними.
+
+Поле Length містить розмір наступного за цими заголовками блоку даних у байтах.
+
+Поле Flags має структуру, що описана в таблиці~\ref{tbl:data-chunk-flags}.
+
+\begin{table}[htbp]
+  \captionbox{\label{tbl:data-chunk-flags}}{%
+    \begin{tabu} to \textwidth { | X[l] | X[l] | }
+      \hline
+      Розряд & Значення булевого флагу \\
+      \hline
+      Біти 7--1 & Зарезервовано \\
+      \hline
+      Біт 0 & More \\
+      \hline
+    \end{tabu}
+  }
+\end{table}
+
+Флаг More вказує, чи є в даному каналі наступний Data Chunk. Якщо значення біта
+виставлено в 0, то даний Data Chunk є останнім і закриває собою канал.
+
+Зарезервовані флаги \emph{повинні} бути виставлені в 0.
+
+\subsubsection{Альтернативний метод швидкого сповіщення про події в системі}
+
+Планується також використовувати UDP як допоміжний канал зв'язку в тих
+випадках, коли порядок і гарантія доставки подій не важлива, прикріплені дані
+малі за обсягом, а частота велика, тому передавати повідомлення типу Event
+стандартним механізмом неефективно.
+
+Для захисту основного каналу передачі даних є TLS, а конфіденційність і
+цілісніть UDP-датаграм необхідно забезпечити на рівні прикладного протоколу.
+
+Для цього будемо використовувати симетричне шифрування сесійним ключем
+<<тунелю>> (див. таблицю~\ref{tbl:protocol-newtunnel}) з використанням
+криптографічного примітиву \gls{AEAD}, що забезпечує одночасно і шифрування, і
+криптографічний підпис, що засвідчує цілісність даних, а також дозволяє додати
+до так званого \gls{AEAD}-контейнера невелику кількість незашифрованих (але
+підписаних) даних, що в даному сценарії використання знадобиться для того, щоб
+розрізняти, якому зі з'єднань (і, відповідно, <<тунелів>>) слід маршрутизувати
+датаграму, якщо всі вони (або декілька з них) будуть використовувати один порт.
+
+В якості конкретної реалізації концепції AEAD візьмемо сучасний алгоритм, що
+базується на шифрі ChaCha20~\cite{chacha20} і алгоритмі аутентифікації
+повідомлень (\gls{MAC}) Poly1305~\cite{poly1305}, з модифікаціями IETF, що
+прийнято в якості стандарту RFC~7539~\cite{rfc7539}
+
+І ChaCha20, і Poly1305 --- це сучасні, надійні і дуже швидкі алгоритми, що
+були детально досліджені багатьма криптографами, і зараз стрімко набирають
+популярність на заміну більш класичним алгоритмам. В якості прикладів:
+
+\begin{itemize}
+\item
+  Google використовував свою імплементацію цих алгоритмів для шифрування
+  TLS-трафіку між своїми серверами і пристроями під управлінням Android, а
+  також браузером Google Chrome, з 2014 року;
+\item
+  чернетка офіційного стандарту TLS~1.3 містить набір шифрів
+  TLS\_CHACHA20\_POLY1305\_SHA256 і рекомендує його до використання~\cite{tls13}.
+\end{itemize}
+
+Версії алгоритмів ChaCha20, ChaCha20-Poly1305 і ChaCha20-Poly1305 \gls{AEAD}
+від IETF, що описані в RFC~7539, відрізняються від оригінальних тим, що довжина
+nonce-значення збільшена з 64 біт до 96 біт, через що розмір лічильника для
+шифрування блоків зменшився з 64 біт до 32 біт, обмежуючи розмір одного
+повідомлення 256 Гб замість $2^{64}$ байтів, але дозволяючи зашифрувати одним і
+тим самим ключем значно більше різних повідомлень (як і в інших подібних
+алгоритмах, не можна використовувати одну й ту ж пару ключа і нонса на різних
+даних, інакше, перехопивши їх, атакуючий зможе провести криптоаналіз).
+
+Таким чином, з кожним екземпляром структури Tunnel буде асоційовано два числа:
+сесійний ключ довжиною 32 байти, що генерує сервер, і випадкове число
+nonce довжиною 12 байтів, яке кожна сторона генерує для себе сама, після чого
+маскує молодший біт: клієнт виставляє його в 0, а сервер --- в 1.
+
+Алгоритм використання \gls{AEAD} для шифрування датаграм показано на
+рис.~\ref{fig:udp-encrypt-algo} і рис.~\ref{fig:udp-encrypt-flowchart}.
+Алгоритм використання \gls{AEAD} для дешифрування датаграм показано на
+рис.~\ref{fig:udp-decrypt-algo}, а повний алгоритм їх обробки після отримання
+з зовнішньої мережі --- в документі ІАЛЦ.467100.003~Д3.
+
+\begin{figure}[!htbp]
+  \begin{algorithm}[H]
+    \SetKwData{Secret}{secret}
+    \SetKwData{Tunnel}{tunnel}
+    \SetKwData{Nonce}{nonce}
+    \SetKwData{Message}{message}
+    \SetKwData{Ciphertext}{container}
+    \SetKwFunction{GetSecret}{GetSecret}
+    \SetKwFunction{GetNonce}{GetNonce}
+    \SetKwFunction{SetNonce}{SetNonce}
+    \SetKwFunction{Encrypt}{AEAD\_ChaCha20\_Poly1305\_IETF\_Encrypt}
+    \SetKwInOut{Input}{input}
+    \SetKwInOut{Output}{output}
+
+    \Input{%
+      \Message\xspace --- повідомлення для захищеної передачі в контексті
+      мультиплексованого з'єднання \Tunnel; \Message~$=$~$(H, P)$, де $H$ ---
+      відкриті заголовки, $P$ --- секретна частина}
+    \Output{\Ciphertext\xspace --- зашифроване повідомлення в \gls{AEAD}-контейнері}
+    \BlankLine
+
+    \Begin{
+      \Secret$\leftarrow$ \GetSecret{\Tunnel}\;
+      \Nonce$\leftarrow$ \GetNonce{\Tunnel}\;
+      \SetNonce{\Tunnel, \Nonce$+$ $2$}\;
+      \Ciphertext$\leftarrow$ \Encrypt{\Message, \Secret, \Nonce}\;
+    }
+  \end{algorithm}
+
+  \caption{Алгоритм створення захищеного повідомлення у вигляді псевдокоду}%
+  \label{fig:udp-encrypt-algo}
+\end{figure}
+
+\begin{figure}[!hbtp]
+  \begin{algorithm}[H]
+    \SetKwData{Secret}{secret}
+    \SetKwData{Tunnel}{tunnel}
+    \SetKwData{Message}{message}
+    \SetKwData{Ciphertext}{container}
+    \SetKwFunction{GetSecret}{GetSecret}
+    \SetKwFunction{Decrypt}{AEAD\_ChaCha20\_Poly1305\_IETF\_Decrypt}
+    \SetKwInOut{Input}{input}
+    \SetKwInOut{Output}{output}
+
+    \Input{\Ciphertext\xspace --- повідомлення в \gls{AEAD}-контейнері,
+      ключ для розшифрування якого є унікальним для мультиплексованого
+      з'єднання \Tunnel; \Ciphertext~$=$~$(H, C, S)$, де $H$ --- відкриті
+      заголовки, $C$ --- шифротекст секретної частини повідомлення, $S$ ---
+      \gls{MAC}-підпис}
+    \Output{\Message\xspace --- вихідне повідомлення}
+    \BlankLine
+
+    \Begin{
+      \Secret$\leftarrow$ \GetSecret{\Tunnel}\;
+      \Message$\leftarrow$ \Decrypt{\Ciphertext, \Secret}\;
+    }
+  \end{algorithm}
+
+  \caption{Алгоритм відтворення захищеного повідомлення у вигляді псевдокоду}%
+  \label{fig:udp-decrypt-algo}
+\end{figure}
+
+\begin{figure}[tbp]
+  \centering
+
+  \begin{tikzpicture}[node distance=3cm, font=\gostfont\small]
+    \node (start) [flow:startstop] {Початок};
+    \node (input) [flow:io, below of=start] {%
+      Повідомлення, секретний ключ і останнє значення nonce};
+    \node (encrypt) [flow:process, below of=input] {%
+      Шифрування повідомлення в \gls{AEAD}-режимі};
+    \node (upd-nonce) [flow:process, below of=encrypt] {%
+      Збільшити значення nonce на 2};
+    \node (output) [flow:io, below of=upd-nonce] {%
+      Зашифроване повідомлення, нове значення nonce};
+    \node (stop) [flow:startstop, below of=output] {Кінець};
+
+    \draw [flow:arrow] (start) -- (input);
+    \draw [flow:arrow] (input) -- (encrypt);
+    \draw [flow:arrow] (encrypt) -- (upd-nonce);
+    \draw [flow:arrow] (upd-nonce) -- (output);
+    \draw [flow:arrow] (output) -- (stop);
+  \end{tikzpicture}
+
+  \caption{Блок-схема алгоритму створення захищеного повідомлення}%
+  \label{fig:udp-encrypt-flowchart}
+\end{figure}

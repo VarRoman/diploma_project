@@ -1,0 +1,7 @@
+#!/bin/sh
+
+latexmk -pdflatex='xelatex %O %S' -pdf -jobname=build/%A *.tex
+
+gs -dNOPAUSE -sDEVICE=pdfwrite -sOUTPUTFILE=full-diploma.pdf -dBATCH build/project-title.pdf build/specification.pdf build/tech-task.pdf build/thesis.pdf build/annex-p.pdf build/annex-f.pdf build/annex-s.pdf 
+
+

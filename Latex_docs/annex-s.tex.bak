@@ -1,0 +1,37 @@
+\documentclass[%
+  ukrainian, utf8, columnvii, simple,
+  hpadding=10mm, vpadding=10mm, reduceheight=2mm,
+  floatsection,
+]{eskdtext}
+%
+
+\input{common/preamble}
+
+\stampDocName{\SStranscript}
+\stampDocId{\SSid}{\SSh}
+
+\begin{document}
+
+\pagenumbering{gobble}
+\maketitle
+\pagenumbering{arabic}
+
+\begin{figure}[p]
+  \centering
+
+  \begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=6cm,thick,%
+                      font=\gostfont\large]
+    \tikzstyle{every state} = [rectangle,rounded corners]
+    \node[initial,state] (A)              {AWAITING\_HANDSHAKE};
+    \node[state]         (B) [below of=A] {AWAITING\_TUNNEL};
+    \node[state]         (C) [below of=B] {NORMAL};
+    \node[state]         (D) [below of=C] {NETWORK\_CONN\_LOST};
+    \path (A) edge node {Protocol Handshake} (B)
+          (B) edge node[align=left] {Open Tunnel, New Tunnel, \\ State Synchronization} (C)
+          (C) edge [loop right] node[align=left] {Channel Preamble, \\ Data Chunk, Ping, Pong} (C)
+          (C) edge node {Network Error} (D)
+          (D) edge [bend left=60] node {Reconnect} (A);
+  \end{tikzpicture}
+\end{figure}
+%
+\end{document}

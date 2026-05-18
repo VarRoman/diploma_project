@@ -1,0 +1,165 @@
+%%% Основні відомості для заповнення%%%
+
+\newcommand{\theWordDone}{Виконав}               % Виконав vs Виконала
+
+\newcommand{\theStudent}{студент}                % студент vs студентка
+\newcommand{\theSYear}{4}                        % Курс: 4
+\newcommand{\theGroup}{IО-82}                    % Група
+\newcommand{\theStampCode}{ІАЛЦ.467200}          % Код у штампі: код КПІ та код пристрою 
+
+
+
+\newcommand{\thesisAuthor}{Іванов Іван Іванович}             % Автор дипломного проекту
+\newcommand{\thesisAuthorTask}{Іванову Івану Івановичу}       % Кому видане завдання для дипломного проектування
+\newcommand{\thesisAuthorInitials}{Іванов~І.~І.}              % Прізвище та ініціали автора дипломного проекту
+
+\newcommand{\taskDate}{10~травня 2022 року}      % Дата видачі завдання
+\newcommand{\completeDate}{5~червня \the\year\ року}  % Дата здачі закінченого проекту
+\newcommand{\approvalDate}{5~червня 2022 року}  % Дата затвердення наказом по університету
+\newcommand{\approvalNum}{1212-­с}   % Номер наказу затвердення теми
+
+\newcommand{\thisisHD}           % Завідувач кафедри:  ім’я, прізвище
+{\todo{Сергій СТІРЕНКО}}
+\newcommand{\thisisHDInitials}   % Завідувач кафедри:  прізвище, ініціали
+{Стіренко~С.~Г.}
+
+\newcommand{\thesisTitle}        % Тема дипломного проекту
+{Дуже цікава та актуальна тема дипломного проекту}
+%{Інтерфейс користувача для класифікації рукописних цифр}
+
+\newcommand{\thesisOsvitnyaPrograma}     % Освітня програма навчання
+{\todo{Комп’ютерні системи та мережі}}
+
+\newcommand{\thesisSpecialtyNumber}    % Номер спеціальності
+{\todo{123}}
+
+\newcommand{\thesisSpecialtyTitle}     % Назва спеціальності
+{\todo{Комп’ютерна інженерія}}
+
+\newcommand{\thesisDegree}             % Освiтньо-квалiфiкацiйний рiвень
+{\todo{Бакалавр}}
+
+
+\newcommand{\thesisOrganization}       % Назва навчального закладу
+{\todo{Національний технічний університет України}}
+\newcommand{\thesisOOrganization} 
+{\todo{``Київський політехнічний інститут імені Ігоря Сікорського''}}
+
+\newcommand{\thesisInstitute}           % Факультет
+{\todo{Факультет інформатики та обчислювальної техніки}}
+
+\newcommand{\thesisDepartment}          % Кафедра
+{\todo{Кафедра обчислювальної техніки}}
+
+
+\newcommand{\supervisorFio}            % Керівник проекту: прізвище, ім’я, по батькові
+{Гордієнко Юрій Григорович}
+\newcommand{\supervisorInitials}       % Керівник проекту:  прізвище, ініціали
+{Гордієнко~Ю.~Г.}
+\newcommand{\supervisorRegalia}        % Керівник проекту: посада, науковий ступінь, вчене звання
+{\todo{доктор фіз.-мат. наук, професор}}
+
+\newcommand{\visorFio}                 % Рецензент проекту: прізвище, ім’я, по батькові
+{\todo{Писаренко Андрій Володимирович}}
+\newcommand{\visorRegalia}             % Рецензент проекту: посада, науковий ступінь, вчене звання
+{\todo{кандидат наук, доцент}}
+
+\newcommand{\consultantFio}            % Консультант проекту: прізвище, ім’я, по батькові
+{Сімоненко Валерій Павлович}
+\newcommand{\consultantRegalia}        % Консультант проекту: посада, науковий ступінь, вчене звання
+{\todo{доктор технічних наук, професор}}
+\newcommand{\consultantInitials}       % Консультант проекту: прізвище та ініціали 
+{Сімоненко~В.~П.}
+\newcommand{\consultantPart}       % Консультант проекту: назва розділу
+{Нормоконтроль}
+                     
+
+%-------- Вихiднi данi до проєкту -------------
+\newcommand{\dataInput}
+{
+технічна документація, теоретичні та статистичні дані, патенти на винахід, наукові публікації.
+}
+
+%-------- Змiст розрахунково-пояснювальної записки -------------
+\newcommand{\explanatoryNoteContents}
+{
+опис предметної області і напрямків дослідження, аналіз та характеристика об’єкту досліджень, аналіз існуючих рішень, опис архітектури системи.
+}
+
+%-------- Перелік графічного матеріалу -------------
+\newcommand{\graphicMaterial}
+{
+принципова, структурна та  функціональна схеми системи.
+}
+
+
+%-------- Консультанти розділів проекту -------------
+\newcommand{\consultantsTab}
+{
+\begin{table}[H]
+\begin{center}
+\begin{tabular}{ |>{\centering}m{0.5cm}|m{5cm}|>{\centering}m{5.5cm}|>{\centering}m{2cm}|>{\centering}m{2cm}|}
+\hline
+\rowcolor{lightgray!20}
+  &  &  & \multicolumn{2}{c |}{Підпис, дата}  \tabularnewline \cline{4-5}
+  
+\rowcolor{lightgray!20} 
+\multirow{-1}{*}{№} & \multicolumn{1}{c|}{\multirow{-1}{*}{\raggedright Розділ}} &\multicolumn{1}{c|}{\multirow{-1}{*}{\raggedright Консультант}}  & завдання видав & завдання прийняв \tabularnewline
+ 
+\rowcolor{lightgray!20}  
+&  &   \multicolumn{1}{c|}{\multirow{-2}{*}{\raggedright\scriptsize(прізвище та ініціали)}}  &  &    \tabularnewline
+\hline
+   
+\rownumber & \consultantPart  & \consultantInitials &  &  \TBstrut \tabularnewline  
+\hline
+
+%\rownumber & Назва розділу консультацій   & \consultantInitials &  &  \TBstrut \tabularnewline  % Поле для іншого консультанта
+%\hline
+
+\end{tabular}
+\end{center}
+\end{table}
+}
+
+
+%-------- Календарний план -------------
+\newcommand{\calendarPlan}
+{
+\begin{table}[H]
+\setcounter{magicrownumbers}{0}
+\begin{center}
+\begin{tabular}{|>{\centering}m{0.5cm}|>{\raggedright}m{8cm}|>{\centering}m{5cm}|>{\centering}m{2cm}|}
+\hline
+\rowcolor{lightgray!20} № & Назва етапу виконання дипломного проекту & Термін виконання & Примітка  \tabularnewline
+\hline
+
+\rownumber & Затвердження теми проекту  & 06.04.2022--07.06.2022 &  \TBstrut \tabularnewline 
+\hline
+
+\rownumber & Вивчення та аналіз завдання  & 12.05.2022--30.05.2022 &  \TBstrut \tabularnewline 
+\hline
+
+\rownumber & Розробка архітектури та загальної структури системи  &  &  \TBstrut \tabularnewline 
+\hline
+
+\rownumber & Програмна реалізація системи   &  &  \TBstrut \tabularnewline 
+\hline
+
+\rownumber & Оформлення пояснювальної записки  &  &  \TBstrut \tabularnewline 
+\hline
+
+\rownumber & Передзахист  &  &  \TBstrut \tabularnewline 
+\hline
+
+\rownumber & Захист  &  &  \TBstrut \tabularnewline 
+\hline
+
+%\rownumber &   &  &  \TBstrut \tabularnewline  % поле для нового етапу
+%\hline
+\end{tabular}
+\end{center}
+\end{table}
+}
+
+
+{}
