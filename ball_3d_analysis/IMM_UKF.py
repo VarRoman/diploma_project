@@ -1,7 +1,9 @@
 import numpy as np
 from copy import deepcopy
 from scipy.linalg import cholesky, inv, expm, block_diag
+from get_court_position_methods import calibrate_camera, get_3d_position
 from scipy.stats import multivariate_normal
+import sys
 
 
 class UnscentedKalmanFilter(object):
@@ -25,7 +27,7 @@ class UnscentedKalmanFilter(object):
         self.z_mean_fn = z_mean_fn
         self.Wm, self.Wc = points.Wm, points.Wc
         self.likelihood = None
-        self._log_likelihood = log(sys.float_info.min)
+        self._log_likelihood = np.log(sys.float_info.min)
         self._mahalanobis = None
 
         if sqrt_fn is None:
@@ -181,62 +183,6 @@ class UnscentedKalmanFilter(object):
             self._mahalanobis = np.sqrt(float(np.dot(np.dot(self.y.T, self.SI), self.y)))
         return self._mahalanobis
 
-def unscented_transform(sigmas, Wm, Wc, noise_cov=None,
-                        mean_fn=None, residual_fn=None):
-    r"""
-    Computes unscented transform of a set of sigma points and weights.
-    returns the mean and covariance in a tuple.
-    :param residual_fn:
-    :param sigmas: ndarray, of size (n, 2n+1)
-        2D array of sigma points.
-
-    :param Wm : ndarray [# sigmas per dimension]
-        Weights for the mean.
-
-
-    :param Wc : ndarray [# sigmas per dimension]
-        Weights for the covariance.
-
-    :param noise_cov: ndarray, optional
-        noise matrix added to the final computed covariance matrix.
-
-    :param mean_fn: callable (sigma_points, weights), optional
-        Function that computes the mean of the provided sigma points
-        and weights
-    """
-
-    kmax, n = sigmas.shape
-
-    try:
-        if mean_fn is None:
-            # new mean is just the sum of the sigmas * weight
-            x = np.dot(Wm, sigmas)    # dot = \Sigma^n_1 (W[k]*Xi[k])
-        else:
-            x = mean_fn(sigmas, Wm)
-    except:
-        print(sigmas)
-        raise
-
-
-    # new covariance is the sum of the outer product of the residuals
-    # times the weights
-
-    # this is the fast way to do this - see 'else' for the slow way
-    if residual_fn is np.subtract or residual_fn is None:
-        y = sigmas - x[np.newaxis, :]
-        P = np.dot(y.T, np.dot(np.diag(Wc), y))
-    else:
-        P = np.zeros((n, n))
-        for k in range(kmax):
-            y = residual_fn(sigmas[k], x)
-            P += Wc[k] * np.outer(y, y)
-
-    if noise_cov is not None:
-        P += noise_cov
-
-    return x, P
-
-
 class IMMEstimator(object):
     """ Implements an Interacting Multiple-Model (IMM) estimator.
     :param filters: N-list consisting of filters in sequenced order
@@ -271,7 +217,7 @@ class IMMEstimator(object):
         self.P_prior = self.P.copy()
         self.x_post = self.x.copy()
         self.P_post = self.P.copy()
-        self._log_likelihood = log(sys.float_info.min)
+        self._log_likelihood = np.log(sys.float_info.min)
         self._mahalanobis = None
 
     def filter_setx(self):
@@ -523,6 +469,62 @@ class MerweScaledSigmaPoints(object):
             pretty_str('sqrt', self.sqrt)
         ])
 
+def unscented_transform(sigmas, Wm, Wc, noise_cov=None,
+                        mean_fn=None, residual_fn=None):
+    r"""
+    Computes unscented transform of a set of sigma points and weights.
+    returns the mean and covariance in a tuple.
+    :param residual_fn:
+    :param sigmas: ndarray, of size (n, 2n+1)
+        2D array of sigma points.
+
+    :param Wm : ndarray [# sigmas per dimension]
+        Weights for the mean.
+
+
+    :param Wc : ndarray [# sigmas per dimension]
+        Weights for the covariance.
+
+    :param noise_cov: ndarray, optional
+        noise matrix added to the final computed covariance matrix.
+
+    :param mean_fn: callable (sigma_points, weights), optional
+        Function that computes the mean of the provided sigma points
+        and weights
+    """
+
+    kmax, n = sigmas.shape
+
+    try:
+        if mean_fn is None:
+            # new mean is just the sum of the sigmas * weight
+            x = np.dot(Wm, sigmas)    # dot = \Sigma^n_1 (W[k]*Xi[k])
+        else:
+            x = mean_fn(sigmas, Wm)
+    except:
+        print(sigmas)
+        raise
+
+
+    # new covariance is the sum of the outer product of the residuals
+    # times the weights
+
+    # this is the fast way to do this - see 'else' for the slow way
+    if residual_fn is np.subtract or residual_fn is None:
+        y = sigmas - x[np.newaxis, :]
+        P = np.dot(y.T, np.dot(np.diag(Wc), y))
+    else:
+        P = np.zeros((n, n))
+        for k in range(kmax):
+            y = residual_fn(sigmas[k], x)
+            P += Wc[k] * np.outer(y, y)
+
+    if noise_cov is not None:
+        P += noise_cov
+
+    return x, P
+
+
 def Q_discrete_white_noise(dim, dt=1., var=1., block_size=1, order_by_dim=True):
     """
     Returns the Q matrix for the Discrete Constant White Noise
@@ -592,3 +594,89 @@ def logpdf(x, mean=None, cov=1, allow_singular=True):
     if _support_singular:
         return multivariate_normal.logpdf(flat_x, flat_mean, cov, allow_singular)
     return multivariate_normal.logpdf(flat_x, flat_mean, cov)
+
+
+def fx_ballistic(x, dt):
+    """Балістична нелінійна модель: x_next = F*x * gravity_effect
+    F-матриця для [x, vx, y, vy, z, vz]"""
+    vx, vy, vz = x[1], x[3], x[5]
+    vx = np.clip(vx, -40.0, 40.0)
+    vy = np.clip(vy, -40.0, 40.0)
+    vz = np.clip(vz, -40.0, 40.0)
+
+    F = np.array([[1, dt, 0, 0,  0,  0],                  # x
+                  [0, 1,  0, 0,  0,  0],                  # vx
+                  [0, 0,  1, dt, 0,  0],                  # y
+                  [0, 0,  0, 1,  0,  0],                  # vy
+                  [0, 0,  0, 0,  1,  dt],                 # z
+                  [0, 0,  0, 0,  0,  1]], dtype=float)    # vz
+
+    B = np.diag([0.5 * dt**2, dt, 0.5 * dt**2, dt, 0.5 * dt**2, dt])
+    k = 0.0314
+    v_mag = np.sqrt(x[1]**2 + x[3]**2 + x[5]**2)
+    a_dx = -k * v_mag * vx
+    a_dy = -k * v_mag * vy
+    a_dz = -k * v_mag * vz
+    u = np.array([a_dx, a_dx, a_dy - 9.81, a_dy - 9.81, a_dz, a_dz])
+
+    x_next = np.dot(F, x) + np.dot(B, u)
+
+    return x_next
+
+def fx_hit(x, dt):
+    """
+    Модель удару: Constant Velocity.
+    Стан: [x, vx, y, vy, z, vz]
+    """
+    F = np.array([[1, dt, 0, 0,  0,  0],
+                  [0, 1,  0, 0,  0,  0],
+                  [0, 0,  1, dt, 0,  0],
+                  [0, 0,  0, 1,  0,  0],
+                  [0, 0,  0, 0,  1,  dt],
+                  [0, 0,  0, 0,  0,  1]], dtype=float)
+
+    return np.dot(F, x)
+
+def fx_bounce(x, dt):
+    """Модель відскоку, марковська матриця"""
+    epsilon = 0.75 # Коефіцієнт реституції
+    friction = 0.85 # Коефіцієнт тертя
+    x_next = np.copy(x)
+    vx_new = x[1] * friction
+    vy_new = -x[3] * epsilon
+    vz_new = x[5] * friction
+
+    x_next[0] += vx_new * dt
+    x_next[2] += vy_new * dt
+    x_next[4] += vz_new * dt
+
+    x_next[1] = vx_new
+    x_next[3] = vy_new
+    x_next[5] = vz_new
+
+    return x_next
+
+def hx(x):
+    return np.array([x[0], x[2], x[4]])
+
+def measurement_transform(prediction_data, K, R_matrix, camera_pos, ball_diameter=0.21):
+    u_cam, v_cam, w_cam = prediction_data['x_pos'], prediction_data['y_pos'], prediction_data['w_box']
+    raw_x, raw_y, raw_z = get_3d_position(u_cam, v_cam, w_cam, K, R_matrix, camera_pos, ball_diameter)
+    raw_y = -raw_y
+    measurement = np.array([raw_x, raw_y, raw_z], dtype=np.float32)
+
+    return measurement
+
+def get_dynamic_transition_matrix(y, vy):
+    """
+    Повертає марковську матрицю 3x3 для моделей: [Ballistic, Hit, Bounce]
+    """
+    M = np.array([[0.95, 0.04, 0.01],
+                  [0.60, 0.40, 0.00],
+                  [0.90, 0.00, 0.10]])
+
+    if y < 0.3 and vy < 0:
+        M[0] = [0.10, 0.05, 0.85]
+        M[1] = [0.10, 0.05, 0.85]
+
+    return M

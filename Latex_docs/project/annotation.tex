@@ -10,40 +10,32 @@
 \newcommand{\contribution}{\textbf{Особистий вклад.}}
 \newcommand{\keyword}{\textbf{Ключові слова:}}
 
+\textbf{Об'єм і структура проєкту.} Проєкт складається з вступу, чотирьох розділів, висновків, переліку умовних
+скорочень та списку літератури.
 
-\textbf{Об'єм і структура проєкту.} Проєкт складається з вступу, чотирьох розділів, висновків, переліку умовних скорочень та списку літератури.
+{\actuality} Роботу присвячено розробці програмно-алгоритмічного комплексу для автоматизованого відстеження волейбольного
+м'яча та розрахунку його кінематичних параметрів(швидкості, 3D-траєкторії) на основі монокулярного відеопотоку.
 
+В процесі виконання роботи проаналізовано існуючі комерційні системи спортивної аналітики та виявлено потребу в
+доступних мобільних рішеннях.
+Розроблено архітектуру системи, що базується на моделі глибокого навчання YOLO для
+високоточної об'єктної детекції в умовах розмиття рухом.\ Для переходу від двовимірних піксельних
+координат до фізичних метричних величин імплементовано модель камери-обскури з використанням алгоритму просторового
+калібрування PnP та методу зворотного проектування.
 
-{\actuality} Пошуку нових технологій, які направлені на покращення техніко-економічних показників сучасних енергосистем помітно зростає. Ця активність зв’язана, значною мірою, із обмеженістю природних енергетичних ресурсів на Землі та стрімким збільшенням енергетичного попиту, який викликано швидкими темпами науково-технічного розвитку людства.
+Для вирішення проблеми високочастотного апаратного шуму та компенсації нелінійних аеродинамічних
+ефектів застосовано математичний апарат оптимальної фільтрації — сигма-точковий фільтр Калмана.
+З метою точного відстеження різких змін швидкості під час атакуючих ударів розроблено гібридну
+архітектуру на базі взаємодіючих множинних моделей.
 
-Значний інтерес для проведення такого роду пошуків, представляють газотурбінні двигуни та установки. Більшість з них сьогодні працюють за прямим циклом Брайтона у діапазоні температур робочого тіла від 730 $^{\circ}$С до 1650~$^{\circ}$С перед турбіною та ступенем стиснення від 3 до 30. Проте, основним недоліком таких установок є значна кількість невикористаної енергії, яка викидається у атмосферу без подальшого використання. Це зумовлено технологічними та конструктивними особливостями таких установок. У зв’язку із цим, термічний ККД кращих на сьогодні газотурбінних установок не перевищує 40\%.
-
-Пошук можливих шляхів підвищення термодинамічної ефективності, привів до ідеї оберненого цикла Брайтона у якому термодинамічні процеси протікають у зворотному напрямку. Такий цикл відноситься до класу холодильних машин: виконана робота рівна за величиною роботі прямого цикла Брайтона, але взята з протилежним знаком. Сама конфігурація оберненого цикла не отримала окремо широкого практичного використання із-за різкого збільшення об'єму компресора і великих витрат енергії на його привід.  
-
-Проблему значних витрат енергії на привід компресора можно значним чином мінімізувати завдяки комбінації оберненого цикла Брайтона та цикла Майсоценка. Цей підхід відкриває принципову можливість створення газотурбінних установок з високим значенням термічного ККД. Також, важливою перевагою цієї комбінації є можливість використання енергії довкілля, яка проявляється у формі психрометричної різниці температур. Ця особливість впливає на вартість виробленої енергії, яка в свою чергу істотно менша порівняно із іншими технологіями відновлювальної енергетики. 
-
-
- \aim\ даного проєкту є проведення термодинамічного та теплофізичного дослідження ГТУ оберненого цикла Брайтона з регенерацією теплоти за М-циклом.
-
-Для досягнення поставленої мети необхідно було вирішити такі {\tasks}:
-\begin{enumerate}
-	\item Освоїти створену в ІТТФ програму та виконати обчислення техніко-економічних характеристик ГТУ, яка працює за оберненим циклом Брайтона та здійснює регенерацію теплоти за М-циклом.
-  \item Розглянути схему ГТУ на основі М-циклу.
-  \item Проаналізувати вплив вхідної у сухі канали апарата
-Майсоценка температури повітря та вплив температури робочого газу перед турбіною на такі показники: термічний та
-електричний ККД ГТУ, ступінь регенерації теплоти у апараті М-циклу, необхідні споживчі витрати повітря та теплові потужності конструктивних елементів ГТУ.
-  \item Проаналізувати вплив температури та вологості атмосферного повітря на термічний та
-електричний ККД, ступінь регенерації теплоти у апараті М-циклу та необхідні споживчі витрати повітря газотурбінною установкою.
-\item Розробити математичну модель тепломасообміну в апараті Майсоценка та визначити шляхи її вирішення.
-\end{enumerate}
-
-
-\contribution\ Здійснено пошук та систематизацію літературних джерел за темою дипломного проєкту; проведено аналіз існуючих підходів до математичного моделювання процесів тепломасообміну. Спільно з керівником розробив математичну модель і визначив можливі шляхи розв’язку системи диференцiальних рiвнянь, що описують тепломасообмiн в апаратi Майсоценка. Виконав розрахунки  та проаналізував вплив вхідної у сухі канали апарата
-Майсоценка температури повітря та вплив температури робочого газу перед турбіною на такі показники: термічний та
-електричний ККД ГТУ, ступінь регенерації теплоти у апараті М-циклу, необхідні споживчі витрати повітря та теплові потужності конструктивних елементів ГТУ. В ході розрахунків також було встановлено вплив температури та вологості атмосферного повітря на термічний та електричний ККД, ступінь регенерації теплоти у апараті М-циклу та необхідні споживчі витрати повітря газотурбінною установкою.
+Експериментальне тестування підтвердило здатність системи реконструювати тривимірну траєкторію та фіксувати пікову
+швидкість удару з використанням однієї камери стандартної частоти кадрів (50-60 FPS). Результати роботи можуть бути
+використані тренерськими штабами для тактико-технічного аналізу та оптимізації тренувального процесу у волейболі.
 
 %
-\keyword\ \textit{обернений цикл Брайтона, цикл Майсоценка, регенерація теплоти, математична модель, тепломасообмін, термогідродинаміка.}  
+\keyword\ \textit{модель глибокого навчання YOLO, алгоритм просторового калібрування PnP, метод зворотного проектування,
+    нелінійні аеродинамічні ефекти, сигма-точковий фільтр Калмана, взаємодіючі множинні моделі, тривімірна
+    траєкторія, пікова швидкість удару.}
 
 
 \newpage
@@ -52,18 +44,26 @@
 \large{\MakeUppercase{\textbf{Annotation}}}
 \end{center}
 
- 
-The aim of this work is to conduct the thermal and thermodynamic research of the gas turbine that operating according to the inverse Brayton сycle along with Maisotsenko heat and mass transfer unit.
+The thesis is devoted to the development of a software and algorithmic complex for automated volleyball tracking and
+calculation of its kinematic parameters (speed, 3D trajectory) based on a monocular video stream.
 
-To reach this aim needs to solve such problems:
-\begin{enumerate}
-	\item To learn the computer code application created in the Institute of Engineering Thermophysics and to evaluate the technical and economic characteristics of the gas turbine that operating according to the inverse Brayton сycle along with Maisotsenko heat and mass transfer unit.
-  \item To consider the scheme of gas turbine unit based on M-cycle.
-  \item To learn the influence of working medium parameters in front of components of the gas turbine, operating according to the inverse Brayton сycle along with Maisotsenko heat and mass transfer unit, as well as to determine the primary cycle parameters.
-\item To develop the mathematical model that describes heat and mass transfer process in the Maisotsenko unit and to determine the ways of its solving.
-\end{enumerate}
+During the research, existing commercial sports analytics systems were analyzed, revealing a strong demand for
+accessible mobile solutions.\ The system architecture is based on the YOLO deep learning model for high-precision object
+detection under severe motion blur conditions.\ To transition from 2D pixel coordinates to physical metric values, a
+pinhole camera model was implemented using the Perspective-n-Point(PnP) spatial calibration algorithm and Ray Casting
+method.
 
+To solve the problem of high-frequency hardware noise and compensate for nonlinear aerodynamic
+effects, the mathematical apparatus of optimal filtering was applied, specifically the Unscented Kalman Filter.
+In order to accurately track abrupt speed changes during spikes, a hybrid architecture based on Interacting Multiple
+Models was designed.
 
-\textbf{Keywords:} \textit{inverse Brayton сycle, Maisotsenko cycle, heat regeneration, mathematical model, heat and mass transfer, thermohydrodynamics.}	
+Experimental testing confirmed the system's ability to reconstruct the 3D trajectory and capture the peak spike speed
+using a single standard frame rate camera (50-60 FPS). The results of the work can be utilized by coaching staffs for
+tactical and technical analysis and the optimization of the training process in volleyball.
+
+\textbf{Keywords:} \textit{YOLO deep learning model, PnP spatial calibration algorithm, Ray Casting
+    method, nonlinear aerodynamic effects, Unscented Kalman Filter, Interacting Multiple Models three-dimensional,
+    trajectory, peak impact velocity.}
 
 \newpage
