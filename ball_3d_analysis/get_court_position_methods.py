@@ -25,10 +25,12 @@ K = np.array([
 
 
 def calibrate_camera(pts_3d, pts_2d, camera_matrix, dist):
-    success, rvec, tvec = cv2.solvePnP(pts_3d, pts_2d, camera_matrix, dist, flags=cv2.SOLVEPNP_ITERATIVE)
+    success, rvec, tvec = cv2.solvePnP(pts_3d, pts_2d, camera_matrix, dist,
+    flags=cv2.SOLVEPNP_ITERATIVE)
 
     if not success:
-        raise ValueError("solvePnP не зміг знайти рішення, треба перевірити порядок точок")
+        raise ValueError("solvePnP не зміг знайти рішення,"
+                         " треба перевірити порядок точок")
 
     R, _ = cv2.Rodrigues(rvec)
 
@@ -38,11 +40,13 @@ def calibrate_camera(pts_3d, pts_2d, camera_matrix, dist):
 
     return R, tvec, camera_position
 
-def get_3d_position(u, v, bbox_w, K, R_matrix, camera_pos, ball_diameter=0.21):
+def get_3d_position(u, v, bbox_w, K, R_matrix, camera_pos,
+    ball_diameter=0.21):
     """
     Параметри:
     u, v: центр BBox м'яча в пікселях
-    bbox_w: ширина BBox м'яча в пікселях (беремо ширину, бо вона менше страждає від Motion Blur, ніж висота)
+    bbox_w: ширина BBox м'яча в пікселях (беремо ширину, бо вона менше
+        страждає від Motion Blur, ніж висота)
     K: матриця камери (Intrinsic)
     R_matrix: матриця обертання з solvePnP
     camera_pos: 3D позиція камери (C) з solvePnP

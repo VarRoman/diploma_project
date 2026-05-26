@@ -7,8 +7,8 @@ import sys
 
 
 class UnscentedKalmanFilter(object):
-    def __init__(self, name, dim_x, dim_z, dt, fx, hx, points, sqrt_fn=None, x_mean_fn=None,
-                 z_mean_fn=None, residual_x=None, residual_z=None):
+    def __init__(self, name, dim_x, dim_z, dt, fx, hx, points, sqrt_fn=None,
+            x_mean_fn=None, z_mean_fn=None, residual_x=None, residual_z=None):
         self.name = name
         self.x = np.zeros(dim_x)
         self.P = np.eye(dim_x)
@@ -78,7 +78,8 @@ class UnscentedKalmanFilter(object):
         # calculating sigma points for given mean and covariance
         self.compute_process_sigmas(dt, fx, **fxargs)
         #pass sigmas through the unscented transform to compute the prior
-        self.x, self.P = UT(self.sigmas_f, self.Wm, self.Wc, self.Q, self.x_mean_fn, self.residual_x)
+        self.x, self.P = UT(self.sigmas_f, self.Wm, self.Wc,
+                        self.Q, self.x_mean_fn, self.residual_x)
         self.P = (self.P + self.P.T) / 2.0
         self.x_prior = np.copy(self.x)
         self.P_prior = np.copy(self.P)
@@ -118,7 +119,8 @@ class UnscentedKalmanFilter(object):
         self.sigmas_h = np.atleast_2d(sigmas_h)
 
         # mean and covariance of prediction passed through unscented transform
-        z_mean, self.S = UT(self.sigmas_h, self.Wm, self.Wc, R, self.z_mean_fn, self.residual_z)
+        z_mean, self.S = UT(self.sigmas_h, self.Wm, self.Wc,
+                            R, self.z_mean_fn, self.residual_z)
         self.SI = self.inv(self.S)
 
         # compute cross variance of the state and measurement
@@ -128,7 +130,8 @@ class UnscentedKalmanFilter(object):
         self.y = self.residual_z(z, z_mean)
         S_stable = self.S + np.eye(self.S.shape[0]) * 1e-6
         try:
-            self.likelihood = multivariate_normal.pdf(self.y, mean=np.zeros_like(self.y), cov=S_stable)
+            self.likelihood = multivariate_normal.pdf(self.y,
+                    mean=np.zeros_like(self.y), cov=S_stable)
         except np.linalg.LinAlgError:
             # Catching singularity effect
             self.likelihood = 1e-300
@@ -456,18 +459,8 @@ class MerweScaledSigmaPoints(object):
 
 
     def __repr__(self):
-
-        return '\n'.join([
-            'MerweScaledSigmaPoints object',
-            pretty_str('n', self.n),
-            pretty_str('alpha', self.alpha),
-            pretty_str('beta', self.beta),
-            pretty_str('kappa', self.kappa),
-            pretty_str('Wm', self.Wm),
-            pretty_str('Wc', self.Wc),
-            pretty_str('subtract', self.subtract),
-            pretty_str('sqrt', self.sqrt)
-        ])
+        return (f'MerweScaledSigmaPoints(n={self.n}, alpha={self.alpha}, '
+                f'beta={self.beta}, kappa={self.kappa})')
 
 def unscented_transform(sigmas, Wm, Wc, noise_cov=None,
                         mean_fn=None, residual_fn=None):
@@ -591,9 +584,8 @@ def logpdf(x, mean=None, cov=1, allow_singular=True):
 
     flat_x = np.asarray(x).flatten()
 
-    if _support_singular:
-        return multivariate_normal.logpdf(flat_x, flat_mean, cov, allow_singular)
-    return multivariate_normal.logpdf(flat_x, flat_mean, cov)
+    return multivariate_normal.logpdf(flat_x, flat_mean,
+                                      cov, allow_singular=allow_singular)
 
 
 def fx_ballistic(x, dt):
@@ -659,9 +651,12 @@ def fx_bounce(x, dt):
 def hx(x):
     return np.array([x[0], x[2], x[4]])
 
-def measurement_transform(prediction_data, K, R_matrix, camera_pos, ball_diameter=0.21):
-    u_cam, v_cam, w_cam = prediction_data['x_pos'], prediction_data['y_pos'], prediction_data['w_box']
-    raw_x, raw_y, raw_z = get_3d_position(u_cam, v_cam, w_cam, K, R_matrix, camera_pos, ball_diameter)
+def measurement_transform(prediction_data, K, R_matrix, camera_pos,
+                          ball_diameter=0.21):
+    u_cam, v_cam, w_cam = (prediction_data['x_pos'], prediction_data['y_pos'],
+                           prediction_data['w_box'])
+    raw_x, raw_y, raw_z = get_3d_position(u_cam, v_cam, w_cam, K,
+                                          R_matrix, camera_pos, ball_diameter)
     raw_y = -raw_y
     measurement = np.array([raw_x, raw_y, raw_z], dtype=np.float32)
 

@@ -6,8 +6,8 @@ import cv2
 
 
 def create_imm_estimator(z_initial, dt=0.02):
-    frames_per_second = 50
-    dt = 1 / frames_per_second
+    # dt is forwarded from IMMTracker (1 / source FPS);
+    # default corresponds to 50 FPS
     dim_x = 6
     dim_z = 3
     points = MerweScaledSigmaPoints(n=dim_x, alpha=.1, beta=2., kappa=1.)
@@ -30,19 +30,22 @@ def create_imm_estimator(z_initial, dt=0.02):
     Q_bounce = block_diag(q_bnc, q_bnc, q_bnc)
 
     # Ballistic filter
-    ukf_ballistic = UnscentedKalmanFilter(name='ballistic UKF', dim_x=dim_x, dim_z=dim_z, dt=dt, fx=fx_ballistic, hx=hx, points=points)
+    ukf_ballistic = UnscentedKalmanFilter(name='ballistic UKF', dim_x=dim_x,
+                    dim_z=dim_z, dt=dt, fx=fx_ballistic, hx=hx, points=points)
     ukf_ballistic.P = P_init
     ukf_ballistic.Q = Q_ballistic
     ukf_ballistic.R = R_init
 
     # Hit filter
-    ukf_hit = UnscentedKalmanFilter(name='hit UKF', dim_x=dim_x, dim_z=dim_z, dt=dt, fx=fx_hit, hx=hx, points=points)
+    ukf_hit = UnscentedKalmanFilter(name='hit UKF', dim_x=dim_x, dim_z=dim_z,
+                                    dt=dt, fx=fx_hit, hx=hx, points=points)
     ukf_hit.P = P_init
     ukf_hit.Q = Q_hit
     ukf_hit.R = R_init
 
     # Bounce filter
-    ukf_bounce = UnscentedKalmanFilter(name='bounce UKF', dim_x=dim_x, dim_z=dim_z, dt=dt, fx=fx_bounce, hx=hx, points=points)
+    ukf_bounce = UnscentedKalmanFilter(name='bounce UKF', dim_x=dim_x,
+                    dim_z=dim_z, dt=dt, fx=fx_bounce, hx=hx, points=points)
     ukf_bounce.P = P_init
     ukf_bounce.Q = Q_bounce
     ukf_bounce.R = R_init
@@ -98,11 +101,14 @@ class Track:
 
     def get_mahalanobis_distance(self, z, R_matrix):
         """
-        Обчислює відстань Махаланобіса між прогнозом IMM та новою детекцією.
+        Обчислює відстань Махаланобіса між прогнозом IMM та
+        новою детекцією.
         """
-        # Проектуємо змішаний стан x_prior та коваріацію P_prior у простір вимірювань
+        # Проектуємо змішаний стан x_prior та коваріацію
+        # P_prior у простір вимірювань
         z_mean = np.dot(self.h_matrix, self.imm.x_prior)
-        S = np.dot(self.h_matrix, np.dot(self.imm.P_prior, self.h_matrix.T)) + R_matrix
+        S = np.dot(self.h_matrix, np.dot(self.imm.P_prior,
+                        self.h_matrix.T)) + R_matrix
 
         y = z - z_mean  # Вектор невязки
 
@@ -117,9 +123,9 @@ class Track:
 class IMMTracker:
     def __init__(self, dt=0.02, max_age=50, min_hits=3, gating_threshold=11.34):
         self.dt = dt
-        self.max_age = max_age  # К-сть кадрів до видалення треку (50 кадрів = 1 сек)
+        self.max_age = max_age  # К-сть кадрів до видалення треку
         self.min_hits = min_hits  # К-сть кадрів для підтвердження
-        self.gating_threshold = gating_threshold  # Хі-квадрат поріг для 3 ступенів свободи (99%)
+        self.gating_threshold = gating_threshold  # Хі-квадрат поріг
 
         self.tracks = []
         self.next_id = 1
@@ -127,7 +133,8 @@ class IMMTracker:
 
     def update(self, detections_3d):
         """
-        detections_3d: список масивів np.array([x, y, z]) для всіх знайдених об'єктів у кадрі
+        detections_3d: список масивів np.array([x, y, z]) для
+        всіх знайдених об'єктів у кадрі
         """
         for track in self.tracks:
             track.predict()
