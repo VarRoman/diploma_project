@@ -121,19 +121,33 @@ class UnscentedKalmanFilter(object):
         # mean and covariance of prediction passed through unscented transform
         z_mean, self.S = UT(self.sigmas_h, self.Wm, self.Wc,
                             R, self.z_mean_fn, self.residual_z)
-        self.SI = self.inv(self.S)
+        # Регуляризуємо S перед інверсією/правдоподібністю: гарантована
+        # позитивна визначеність навіть при тимчасово виродженій коваріації.
+        S_stable = self.S + np.eye(self.S.shape[0]) * 1e-6
+        try:
+            self.SI = np.linalg.inv(S_stable)
+        except np.linalg.LinAlgError:
+            self.SI = np.linalg.pinv(S_stable)
 
         # compute cross variance of the state and measurement
         Pxz = self.cross_variance(self.x, z_mean, self.sigmas_f, self.sigmas_h)
 
         self.K = np.dot(Pxz, self.SI) # Kalman gain
         self.y = self.residual_z(z, z_mean)
-        S_stable = self.S + np.eye(self.S.shape[0]) * 1e-6
+        # multivariate_normal.pdf без allow_singular=True може кидати ValueError
+        # ("the input matrix must be positive semidefinite") — а не лише
+        # LinAlgError, тому ловимо обидва.
         try:
-            self.likelihood = multivariate_normal.pdf(self.y,
-                    mean=np.zeros_like(self.y), cov=S_stable)
-        except np.linalg.LinAlgError:
-            # Catching singularity effect
+            self.likelihood = multivariate_normal.pdf(
+                self.y,
+                mean=np.zeros_like(self.y),
+                cov=S_stable,
+                allow_singular=True,
+            )
+        except (np.linalg.LinAlgError, ValueError):
+            self.likelihood = 1e-300
+        # IMM-рівень очікує строго додатну правдоподібність:
+        if not np.isfinite(self.likelihood) or self.likelihood <= 0.0:
             self.likelihood = 1e-300
 
         # updating Gaussian state estimate(x, P)
@@ -653,25 +667,101 @@ def hx(x):
 
 def measurement_transform(prediction_data, K, R_matrix, camera_pos,
                           ball_diameter=0.21):
+    """
+    Перетворює запис детекції (px, py, ширина рамки) у тривимірний вимір
+    [X, Y, Z] світових координат у системі майданчика з конвенцією:
+        X — поперек майданчика (по лицевій лінії),
+        Y — вертикальна вісь (вгору, перпендикулярно підлозі),
+        Z — вздовж довгої сторони (по бічній лінії).
+    Підлога відповідає Y = 0; стеля — Y > 0.
+
+    Раніше тут була інверсія `raw_y = -raw_y` — рудимент конвенції
+    Z=вертикаль, що робив висоту від'ємною і ламав гравітаційну
+    компоненту fx_ballistic. Прибрано після уніфікації осей.
+    """
     u_cam, v_cam, w_cam = (prediction_data['x_pos'], prediction_data['y_pos'],
                            prediction_data['w_box'])
     raw_x, raw_y, raw_z = get_3d_position(u_cam, v_cam, w_cam, K,
                                           R_matrix, camera_pos, ball_diameter)
-    raw_y = -raw_y
     measurement = np.array([raw_x, raw_y, raw_z], dtype=np.float32)
 
     return measurement
 
-def get_dynamic_transition_matrix(y, vy):
+def get_dynamic_transition_matrix(y, vy,
+                                  mahalanobis_sq=0.0,
+                                  hit_residual_min_sq=8.0,
+                                  hit_residual_max_sq=11.34):
     """
-    Повертає марковську матрицю 3x3 для моделей: [Ballistic, Hit, Bounce]
+    Повертає марковську матрицю 3x3 переходів IMM для моделей
+    [Ballistic, Hit, Bounce] на наступний крок передбачення.
+
+    Базова матриця "залипає" на Ballistic (M[0,0]=0.95): без зовнішніх
+    тригерів м'яч продовжує летіти по балістичній траєкторії.
+
+    Тригери:
+
+    1) **Bounce** — пасивний геометричний тригер. Якщо м'яч близько до
+       підлоги (y < 0.3 м у вертикальній конвенції Y-вверх) і рухається
+       вниз (vy < 0), наступний крок різко зміщає Markov-матрицю до
+       Bounce-режиму. Це історичний тригер, переніс зі старої версії.
+
+    2) **Mid-air hit** — тригер за residual'ом. Активується тільки коли
+       квадрат Mahalanobis'а останньої прийнятої детекції потрапляє у
+       "rare-event" зону. χ²₃-розподіл має 99-перцентиль ≈ 11.34
+       (= наш гейт). Зона активації [8.0, 11.34] відповідає верхнім
+       ~2% residual'ів — фактично сигнал, що траєкторія раптово
+       змінилась (пас/атака/блок), хоч детекція й не настільки
+       аберантна, щоб не пройти гейт.
+
+       Раніше пробували min_sq=4.0, але це 25-й хвіст χ²₃ — тригер
+       вистрелював у 25% кадрів нормального трекінгу, що подвоїло
+       mode_switch_overall_rate_hz (3.46 → 7.18 Hz на тестовому
+       сегменті). Підняття порогу до 8.0 повертає mode-switching до
+       робочих значень, але зберігає реакцію на справжні удари.
+
+       Параметри:
+
+       - hit_residual_min_sq=8.0:  ~95-й перцентиль χ²₃;
+       - hit_residual_max_sq=11.34: верхня межа = поріг гейтингу.
+
+       Поза діапазоном [min, max] інтерполяція клампується (0 нижче,
+       1 вище).
+
+    :param y:   вертикальна координата м'яча у світовій СК (м).
+    :param vy:  вертикальна швидкість (м/с).
+    :param mahalanobis_sq: квадрат Mahalanobis'а останньої прийнятої
+        детекції відносно IMM-прогнозу (0 для треків без оновлень).
+    :param hit_residual_min_sq, hit_residual_max_sq: діапазон активації
+        hit-тригера (квадрати, що відповідають χ²₃-розподілу).
     """
     M = np.array([[0.95, 0.04, 0.01],
                   [0.60, 0.40, 0.00],
                   [0.90, 0.00, 0.10]])
 
+    # Тригер 1: bounce при контакті з підлогою. Має найвищий пріоритет —
+    # після відскоку інформація з residual'у про "удар" не має сенсу.
     if y < 0.3 and vy < 0:
         M[0] = [0.10, 0.05, 0.85]
         M[1] = [0.10, 0.05, 0.85]
+        return M
+
+    # Тригер 2: mid-air hit за residual'ом. Лінійна інтерполяція рядка
+    # M[0] у бік M_hit_target. M_hit_target обрано КОНСЕРВАТИВНИМ:
+    # навіть при alpha=1 (residual на самому гейті) M[0,0] лишається
+    # 0.60 (sticky-ballistic), а Hit-ймовірність зростає лише до 0.35.
+    # Сильніший shift ([0.30, 0.65, 0.05], який пробували першою
+    # ітерацією) призводив до осциляції Ballistic↔Hit, бо після
+    # переходу до Hit residual різко падав (більша Q абсорбує
+    # неочікувану швидкість), trigger переставав вистрелювати, IMM
+    # повертався у Ballistic, residual знов зростав → нескінченний
+    # цикл. Менш агресивний target гасить осциляцію.
+    if mahalanobis_sq > hit_residual_min_sq:
+        alpha = min(
+            1.0,
+            (mahalanobis_sq - hit_residual_min_sq)
+            / max(hit_residual_max_sq - hit_residual_min_sq, 1e-6),
+        )
+        M_hit_target = np.array([0.60, 0.35, 0.05])
+        M[0] = (1.0 - alpha) * M[0] + alpha * M_hit_target
 
     return M
