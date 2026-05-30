@@ -199,10 +199,11 @@ def rebuild_trails(
         rec = frames[k]
         for tr in rec.get("tracks", []) or []:
             x_post = tr.get("x_post") or []
-            if len(x_post) < 6:
+            # 9D state: pos = indices 0, 3, 6.
+            if len(x_post) < 9:
                 continue
             P3d = np.array(
-                [x_post[0], x_post[2], x_post[4]], dtype=np.float64
+                [x_post[0], x_post[3], x_post[6]], dtype=np.float64
             )
             uv = project_3d_to_pixel(P3d, R, tvec, K, W, H)
             if uv is None:
@@ -223,10 +224,11 @@ def update_trails_step(
     """Інкрементально додає точки нового кадру у trails (для forward step)."""
     for tr in rec.get("tracks", []) or []:
         x_post = tr.get("x_post") or []
-        if len(x_post) < 6:
+        # 9D state: pos = indices 0, 3, 6.
+        if len(x_post) < 9:
             continue
         P3d = np.array(
-            [x_post[0], x_post[2], x_post[4]], dtype=np.float64
+            [x_post[0], x_post[3], x_post[6]], dtype=np.float64
         )
         uv = project_3d_to_pixel(P3d, R, tvec, K, W, H)
         if uv is None:
@@ -332,10 +334,11 @@ def render_frame(
     )
     for tr in selected:
         x_post = tr.get("x_post") or []
-        if len(x_post) < 6:
+        # 9D state: pos = indices 0, 3, 6.
+        if len(x_post) < 9:
             continue
         P3d = np.array(
-            [x_post[0], x_post[2], x_post[4]], dtype=np.float64
+            [x_post[0], x_post[3], x_post[6]], dtype=np.float64
         )
         uv = project_3d_to_pixel(P3d, R, tvec, K, W, H)
         if uv is None:

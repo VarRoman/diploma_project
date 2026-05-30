@@ -136,7 +136,7 @@ class TrackData:
 
     def __init__(self) -> None:
         self.frames: List[int] = []
-        # x_post у точку часу: 6D-вектори
+        # x_post у точку часу: 9D-вектори [x, vx, ax, y, vy, ay, z, vz, az]
         self.x_post: List[List[float]] = []
         # raw_3d на тому ж кадрі (None, якщо не було детекції)
         self.raw_3d: List[Optional[List[float]]] = []
@@ -245,11 +245,12 @@ def compute_idsw(
             continue
         first = d.frames[0]
         last = d.frames[-1]
+        # 9D state: pos = indices 0, 3, 6.
         first_xyz = np.array(
-            [d.x_post[0][0], d.x_post[0][2], d.x_post[0][4]]
+            [d.x_post[0][0], d.x_post[0][3], d.x_post[0][6]]
         )
         last_xyz = np.array(
-            [d.x_post[-1][0], d.x_post[-1][2], d.x_post[-1][4]]
+            [d.x_post[-1][0], d.x_post[-1][3], d.x_post[-1][6]]
         )
         summaries.append((tid, first, last, first_xyz, last_xyz))
 
@@ -279,8 +280,12 @@ def compute_smoothness(
 ) -> Dict[str, float]:
     """
     jerk = mean ||a_t - a_{t-1}|| / dt, де a_t = (v_t - v_{t-1}) / dt.
-    Беремо швидкості з x_post (компоненти 1, 3, 5). Агрегуємо як
-    median по треках.
+    Беремо швидкості з x_post (9D state, компоненти 1, 4, 7). Агрегуємо
+    як median по треках.
+
+    Зауваження: з переходом на 9D у x_post є вже власна оцінка accel
+    (індекси 2, 5, 8) — її можна використовувати як прямий jerk-proxy,
+    але для backward-сумісності метрик лишаємо finite-difference з v.
     """
     jerk_per_track: List[float] = []
     accel_per_track: List[float] = []
@@ -289,9 +294,9 @@ def compute_smoothness(
             continue
         if len(d.x_post) < min_hits:
             continue
-        # Витягуємо v_t
+        # Витягуємо v_t — 9D state: vel indices 1, 4, 7.
         v = np.array(
-            [[p[1], p[3], p[5]] for p in d.x_post], dtype=float
+            [[p[1], p[4], p[7]] for p in d.x_post], dtype=float
         )
         # a_t = (v_t - v_{t-1}) / dt
         a = np.diff(v, axis=0) / max(dt, 1e-9)
@@ -352,7 +357,10 @@ def compute_mode_switching(
 def compute_self_consistency_rmse(
     tracks: Dict[int, TrackData],
 ) -> Dict[str, float]:
-    """RMSE між raw_3d та x_post[(0,2,4)] на кадрах з детекцією."""
+    """RMSE між raw_3d та x_post[(0,3,6)] на кадрах з детекцією.
+
+    9D state: позиційні індекси 0, 3, 6 (було 0, 2, 4 у 6D).
+    """
     sq_errs: List[float] = []
     for tid, d in tracks.items():
         for i, raw in enumerate(d.raw_3d):
@@ -364,8 +372,8 @@ def compute_self_consistency_rmse(
                 continue
             xp = d.x_post[i]
             err = (raw[0] - xp[0]) ** 2 \
-                + (raw[1] - xp[2]) ** 2 \
-                + (raw[2] - xp[4]) ** 2
+                + (raw[1] - xp[3]) ** 2 \
+                + (raw[2] - xp[6]) ** 2
             sq_errs.append(err)
     if not sq_errs:
         return {

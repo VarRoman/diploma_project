@@ -73,11 +73,18 @@ DEFAULT_PTS_REAL_3D = np.array([
     [0.0, 0.0, 18.0],
 ], dtype=np.float32)
 
+# Фізичні розміри майданчика (м): X — ширина 9, Z — довжина 18.
+# Використовуються court-bounds гейтом (відсіювання truncated-детекцій
+# на межах кадру, де bbox_w обвалюється → Z_c роздувається → 3D-точка
+# вистрілює за майданчик). Див. --court_margin.
+COURT_X_SIZE = 9.0
+COURT_Z_SIZE = 18.0
+
 DEFAULT_PTS_VIDEO_2D = np.array([
-    [  69, 1033],
-    [1840, 1031],
-    [1507,  609],
-    [ 405,  609],
+    [  69, 1033],   # P0  лівий-передній
+    [1840, 1031],   # P1  правий-передній
+    [1507,  609],   # P2  правий-задній
+    [ 405,  609],   # P3  лівий-задній
 ], dtype=np.float32)
 
 DEFAULT_K = np.array([
@@ -119,10 +126,14 @@ def parse_args() -> argparse.Namespace:
                    help="YOLO IoU NMS threshold (default 0.45).")
     p.add_argument("--imgsz", type=int, default=1920,
                    help="YOLO inference image size (default 1920).")
-    p.add_argument("--max_age", type=int, default=150,
-                   help="IMMTracker.max_age (default 150 — пiдiбраний "
-                        "sweep'ом logs/sweep_v1: lifeP90=325 кадрiв "
-                        "vs 117 для legacy 50, ~ те саме mGate%).")
+    p.add_argument("--max_age", type=int, default=80,
+                   help="IMMTracker.max_age. Історія: 150 (sweep) → 15 "
+                        "(Plan A, проти фантомного коастингу на сміттєвих "
+                        "детекціях) → 80 (Phase B + edge-gate). Court-bounds "
+                        "гейт (--court_margin) тепер прибирає викиди-фантоми "
+                        "в джерелі, тож причина для 15 зникла. Чиста "
+                        "розгортка з гейтом: 80 дає найкращу fragmentation "
+                        "(0.235) + coverage (0.907) при mode-switch 2.54 Гц.")
     p.add_argument("--min_hits", type=int, default=3,
                    help="IMMTracker.min_hits (default 3).")
     p.add_argument("--gating", type=float, default=11.34,
@@ -134,6 +145,22 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ceiling_max", type=float, default=15.0,
                    help="Якщо raw_3d[1] > ceiling_max — детекція "
                         "відкидається. Default 15 m.")
+    p.add_argument("--court_margin", type=float, default=3.0,
+                   help="Court-bounds гейт: відкидати детекцію, якщо її "
+                        "3D-проєкція лежить далі ніж court_margin метрів за "
+                        "межами майданчика по X (ширина 9 м) чи Z (довжина "
+                        "18 м). Ловить truncated-детекції на межах кадру, де "
+                        "обвал bbox_w роздуває Z_c і кидає точку за зал. "
+                        "Default 3.0 m (запас на ігрову зону за лініями). "
+                        "Встановіть велике значення (напр. 99) щоб вимкнути.")
+    p.add_argument("--enable_hysteresis", action="store_true",
+                   help="Увімкнути Phase B delayed-accept hysteresis "
+                        "(відкладання підозрілих детекцій). Default OFF: "
+                        "defer ділить поріг mah_sq=8 з cov-reset і hit-"
+                        "тригером і канібалізує їх (обнуляє residual для "
+                        "наступного predict). Тримаємо OFF, доки не "
+                        "доналаштуємо cov-reset+hit. Coast-skip працює "
+                        "незалежно від прапорця.")
     p.add_argument("--save_calibration", action="store_true",
                    help="Записати в header (перший рядок JSONL) усі "
                         "калібрувальні матриці для відтворюваності.")
@@ -341,6 +368,7 @@ def main() -> int:
         max_age=args.max_age,
         min_hits=args.min_hits,
         gating_threshold=args.gating,
+        enable_hysteresis=args.enable_hysteresis,
     )
 
     # 5. Перемотування на початковий кадр.
@@ -367,6 +395,8 @@ def main() -> int:
             "gating_threshold": args.gating,
             "floor_eps": args.floor_eps,
             "ceiling_max": args.ceiling_max,
+            "court_margin": args.court_margin,
+            "enable_hysteresis": args.enable_hysteresis,
         },
         "frame_size": [width, height],
     }
@@ -385,6 +415,7 @@ def main() -> int:
     n_detected = 0
     n_rejected_floor = 0
     n_rejected_ceiling = 0
+    n_rejected_oob = 0
     n_used = 0
 
     # 6. Основний цикл по кадрах сегмента.
@@ -434,18 +465,35 @@ def main() -> int:
                 pos = get_3d_position(
                     raw_det["u"], raw_det["v"], raw_det["w_box"],
                     DEFAULT_K, R, camera_pos,
+                    return_none_on_clip=True,
                 )
-                raw_3d = pos.tolist()
-                # Фільтр санітарних меж по Y (висоті).
-                if pos[1] < args.floor_eps:
-                    reject_reason = "below_floor"
-                    n_rejected_floor += 1
-                elif pos[1] > args.ceiling_max:
-                    reject_reason = "above_ceiling"
-                    n_rejected_ceiling += 1
+                if pos is None:
+                    # PLAN A: Z_c вийшов за межі [2.0, 25.0] м — це майже
+                    # завжди false positive YOLO з аномально малою (або
+                    # великою) шириною bbox. Не передаємо у трекер, щоб
+                    # не плодити "треки з кута екрана".
+                    reject_reason = "depth_out_of_range"
                 else:
-                    z_filtered = pos.astype(np.float32)
-                    n_used += 1
+                    raw_3d = pos.tolist()
+                    # Фільтр санітарних меж по Y (висоті).
+                    m = args.court_margin
+                    if pos[1] < args.floor_eps:
+                        reject_reason = "below_floor"
+                        n_rejected_floor += 1
+                    elif pos[1] > args.ceiling_max:
+                        reject_reason = "above_ceiling"
+                        n_rejected_ceiling += 1
+                    elif (pos[0] < -m or pos[0] > COURT_X_SIZE + m
+                          or pos[2] < -m or pos[2] > COURT_Z_SIZE + m):
+                        # Court-bounds гейт. Truncated-детекція на межі
+                        # кадру: bbox_w обвалюється → Z_c роздувається →
+                        # точка вистрілює уздовж променя за майданчик.
+                        # Глибина зіпсована, довіряти позиції не можна.
+                        reject_reason = "out_of_court"
+                        n_rejected_oob += 1
+                    else:
+                        z_filtered = pos.astype(np.float32)
+                        n_used += 1
             except Exception as e:
                 reject_reason = f"get_3d_position_error: {e}"
 
@@ -524,6 +572,7 @@ def main() -> int:
         "n_detected": n_detected,
         "n_rejected_floor": n_rejected_floor,
         "n_rejected_ceiling": n_rejected_ceiling,
+        "n_rejected_oob": n_rejected_oob,
         "n_used_for_update": n_used,
         "final_n_tracks": len(tracker.tracks),
         "final_track_ids": [int(t.track_id) for t in tracker.tracks],
@@ -535,7 +584,7 @@ def main() -> int:
     sys.stderr.write(
         f"[ok] Готово за {elapsed:.1f}s. detect={n_detected} "
         f"used={n_used} reject_floor={n_rejected_floor} "
-        f"reject_ceiling={n_rejected_ceiling}\n"
+        f"reject_ceiling={n_rejected_ceiling} reject_oob={n_rejected_oob}\n"
         f"     final_tracks={summary['final_track_ids']}\n"
         f"     out -> {args.out_jsonl}\n"
     )

@@ -13,10 +13,11 @@ pts_real_3d = np.array([
     [0.0, 0.0, 18.0]],dtype=np.float32)
 
 pts_video_2d = np.array([
-    [  69, 1033],
-    [1840, 1031],
-    [1507,  609],
-    [ 405,  609]],dtype=np.float32)
+    [  69, 1033],   # P0  лівий-передній
+    [1840, 1031],   # P1  правий-передній
+    [1507,  609],   # P2  правий-задній
+    [ 405,  609]],  # P3  лівий-задній
+    dtype=np.float32)
 
 K = np.array([
     [1300.0, 0.0,    960.0],
@@ -75,7 +76,8 @@ def calibrate_camera(pts_3d, pts_2d, camera_matrix, dist, up_axis=1):
     return R, tvec, camera_position
 
 def get_3d_position(u, v, bbox_w, K, R_matrix, camera_pos,
-    ball_diameter=0.21):
+    ball_diameter=0.21, z_min=2.0, z_max=25.0,
+    return_none_on_clip=False):
     """
     Параметри:
     u, v: центр BBox м'яча в пікселях
@@ -85,6 +87,18 @@ def get_3d_position(u, v, bbox_w, K, R_matrix, camera_pos,
     R_matrix: матриця обертання з solvePnP
     camera_pos: 3D позиція камери (C) з solvePnP
     ball_diameter: діаметр волейбольного м'яча в метрах (стандарт 21 см)
+    z_min, z_max: санітарні межі для Z_c (відстані від камери вздовж
+        променя). Z_c обернено пропорційний до bbox_w (Z_c = f·D / bbox_w),
+        тому крихітний bbox дає Z_c у десятки/сотні метрів, а гігантський
+        bbox — < метра. PLAN A: 2.0 м (м'яч біля самої камери) — 25.0 м
+        (діагональ майданчика + запас).
+    return_none_on_clip: якщо True й Z_c поза [z_min, z_max] → повертає
+        None (детекцію треба відкинути як ймовірний false positive). Якщо
+        False (default, backward-compat) — повертає clamp'нуту позицію.
+
+    Returns:
+        np.ndarray shape (3,) — 3D-позиція [X, Y, Z] у світовій СК. Або
+        None, якщо return_none_on_clip=True і Z_c вийшов за межі.
     """
     f_x = K[0, 0]
     c_x = K[0, 2]
@@ -92,6 +106,15 @@ def get_3d_position(u, v, bbox_w, K, R_matrix, camera_pos,
     c_y = K[1, 2]
 
     Z_c = (f_x * ball_diameter) / bbox_w
+
+    # PLAN A: санітарний фільтр на дальність уздовж променя камери.
+    # Маленький false-positive bbox (тінь гравця, плями розмиття) →
+    # Z_c у 50–100 м → 3D-точка летить далеко за межі майданчика, та
+    # її проєкція в наступних кадрах виглядає як "трек з кута екрана".
+    if Z_c < z_min or Z_c > z_max:
+        if return_none_on_clip:
+            return None
+        Z_c = max(z_min, min(z_max, Z_c))
 
     x_norm = (u - c_x) / f_x
     y_norm = (v - c_y) / f_y

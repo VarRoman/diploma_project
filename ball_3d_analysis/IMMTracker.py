@@ -21,30 +21,56 @@ def create_imm_estimator(z_initial, dt=0.02, v_initial=None):
                       життя нового треку.
     """
     # dt is forwarded from IMMTracker (1 / source FPS);
-    # default corresponds to 50 FPS
-    dim_x = 6
+    # default corresponds to 50 FPS.
+    # Step 2.B (Phase 3): 6D CV-state → 9D CA-state.
+    # state = [x, vx, ax, y, vy, ay, z, vz, az]
+    dim_x = 9
     dim_z = 3
     points = MerweScaledSigmaPoints(n=dim_x, alpha=.1, beta=2., kappa=1.)
+    # P_init для 9D стану. Накачуємо коваріацію accel ~25 (м/с²)²
+    # (σ_a ≈ 5 м/с²) — це дозволяє фільтру швидко поглинути перший
+    # ненульовий accel із вимірювань, не вибухнувши гейтом одразу.
     # Якщо швидкість ініціалізована з фінітної різниці двох детекцій, її
-    # σ становить ≈ √2·σ_R/Δt (від ~7 м/с до ~14 м/с при дефолтних R, dt).
-    # Тому коваріація швидкостей лишається 50 — це консервативний пріор,
-    # що дозволяє фільтру швидко поглинути реальну швидкість.
-    P_init = np.diag([0.1, 50.0, 0.1, 50.0, 0.1, 50.0])
-    R_init = np.diag([0.01, 0.01, 0.04])
+    # σ становить ≈ √2·σ_R/Δt (від ~7 м/с до ~14 м/с при дефолтних R, dt),
+    # тому коваріація швидкостей лишається 50.
+    P_init = np.diag([
+        0.1, 50.0, 25.0,
+        0.1, 50.0, 25.0,
+        0.1, 50.0, 25.0,
+    ])
+    # R: коваріація шуму вимірювання у світових координатах [x, y, z] (м²).
+    # σ_z ≈ 0.7 м (моно-камерна глибина має таку похибку через
+    # Z_c = f·D / bbox_w). Користувач підтвердив, що ці значення дають
+    # приємну плавність — спроба зменшити σ_z до 0.5 м (для зменшення
+    # відставання) робила траєкторію надто рваною.
+    R_init = np.diag([0.02, 0.02, 0.5])
 
-    # Для балістичної моделі Q мінімальна
+    # Q-матриці для 9D CA-state. У Q_discrete_white_noise(dim=3, ...)
+    # параметр var має семантику "дисперсія шуму джерку" — нижня
+    # права клітинка блоку = var, що задає, наскільки accel може
+    # випадково "крутитися" за крок.
+    #
+    # ballistic: var=0.1 — м'яч у вільному польоті фактично має accel = g
+    # + drag (smooth), залишковий accel-state ≈ 0; шум джерку маленький.
     q_var_ballistic = 0.1
-    q_b = Q_discrete_white_noise(dim=2, dt=dt, var=q_var_ballistic)
+    q_b = Q_discrete_white_noise(dim=3, dt=dt, var=q_var_ballistic)
     Q_ballistic = block_diag(q_b, q_b, q_b)
 
-    # Для моделі удару Q велика
-    q_var_hit = 100
-    q_h = Q_discrete_white_noise(dim=2, dt=dt, var=q_var_hit)
+    # hit: var=400 — це σ_jerk ≈ 20 (м²/с^6)^{1/2}, що дозволяє accel-стейту
+    # "прокинутись" від ~0 до десятків м/с² за один-два кадри. Тобто
+    # імпульсний удар реалізується НЕ через стрибок швидкості напряму,
+    # а через ріст accel-стейту, який потім інтегрується у швидкість.
+    # Це структурне моделювання маневру (CV-CA IMM Singer-style), на
+    # відміну від наївного збільшення Q[v], що ламало гейтинг у 6D-версії.
+    q_var_hit = 400
+    q_h = Q_discrete_white_noise(dim=3, dt=dt, var=q_var_hit)
     Q_hit = block_diag(q_h, q_h, q_h)
 
-    # Для відскоку Q середня
+    # bounce: var=5 — помірний шум джерку. Після контакту з підлогою
+    # fx_bounce уже скидає accel у 0; Q[a] лише страхує від raptових
+    # відхилень у наступних кадрах.
     q_var_bounce = 5
-    q_bnc = Q_discrete_white_noise(dim=2, dt=dt, var=q_var_bounce)
+    q_bnc = Q_discrete_white_noise(dim=3, dt=dt, var=q_var_bounce)
     Q_bounce = block_diag(q_bnc, q_bnc, q_bnc)
 
     # Ballistic filter
@@ -76,19 +102,37 @@ def create_imm_estimator(z_initial, dt=0.02, v_initial=None):
 
     imm = IMMEstimator(filters_lt, mu, M_base)
 
-    # Ініціалізуємо стан [x, vx, y, vy, z, vz]. Якщо передано v_initial —
-    # використовуємо його; інакше — нулі (legacy-поведінка).
+    # Ініціалізуємо 9D стан [x, vx, ax, y, vy, ay, z, vz, az].
+    # Якщо передано v_initial — використовуємо його; інакше — нулі.
+    # accel-компоненти завжди стартують з 0: ми не знаємо, чи м'яч
+    # був у момент ініціалізації під дією impulse'у; пріор accel=0
+    # відповідає чистій балістиці. Високий P_init[a]=25 дозволяє
+    # фільтру швидко "виявити" ненульовий accel при потребі.
     if v_initial is None:
         vx0 = vy0 = vz0 = 0.0
     else:
         vx0, vy0, vz0 = (float(v_initial[0]), float(v_initial[1]),
                          float(v_initial[2]))
-    initial_x = np.array([z_initial[0], vx0,
-                          z_initial[1], vy0,
-                          z_initial[2], vz0])
+    initial_x = np.array([
+        z_initial[0], vx0, 0.0,
+        z_initial[1], vy0, 0.0,
+        z_initial[2], vz0, 0.0,
+    ])
     for f in imm.filters:
         f.x = initial_x.copy()
+        # filterpy.IMMEstimator у конструкторі копіює f.x_post у imm.x_post
+        # ОДИН РАЗ — і це відбувається ДО того, як ми перезаписали f.x.
+        # Якщо не перевизначити f.x_post тут вручну, у першому snapshot треку
+        # (на кадрі-народжування, ДО першого update'у) у JSONL потрапляє
+        # zeros(6) → live_view/overlay малюють точку у світовому (0,0,0) =
+        # лівий-передній кут майданчика → видима "лінія з кута" для кожного
+        # нового треку. Поле x_post не впливає на predict/update — це лише
+        # post-step snapshot для логування — тому правка безпечна.
+        f.x_post = initial_x.copy()
     imm._compute_state_estimate()
+    # Те саме на рівні IMM-агрегації: imm.x_post читається у snapshot_track
+    # з run_segment.py:214. Перевизначаємо тут до повернення.
+    imm.x_post = initial_x.copy()
 
     return imm
 
@@ -98,9 +142,46 @@ class Track:
     # застосовуємо, бо це майже напевно з'єднання двох різних об'єктів.
     BOOTSTRAP_MAX_SPEED = 35.0
 
+    # Step 2.A (Phase 3): track-level covariance reset on radical residual.
+    # Якщо поточний Mahalanobis^2 високий (хвіст ~5% χ²₃), вважаємо, що
+    # м'яч щойно зробив імпульсний маневр (удар, блок) — і "відкриваємо"
+    # коваріацію швидкості та прискорення ПЕРЕД викликом imm.update(z).
+    # Більший P[v, a] = більший Kalman gain → новий вимір швидко
+    # "втягує" state у нову траєкторію без багатокадрового лагу.
+    # Без цього: після удару фільтр бачить residual ≈ 1 м (z прискорився
+    # геометрично), повільно зменшує його за 3-5 кадрів, накопичує
+    # фантомні mah > гейту, і час від часу втрачає трек.
+    COV_RESET_MAH_SQ_THRESHOLD = 8.0   # ~95-й перцентиль χ²₃
+    COV_RESET_INFLATE_V = 50.0         # (м/с)² — той самий рівень, що P_init[v]
+    COV_RESET_INFLATE_A = 100.0        # (м/с²)² — 4× P_init[a], сильна "відкритість"
+
+    # Phase B: Delayed-accept hysteresis.
+    # Підозріла детекція (mah_sq > THRESHOLD) не приймається одразу — вона
+    # "заморожується" у _pending і чекає підтвердження з наступних кадрів.
+    # Якщо підтвердження є (наступна детекція теж далеко) — маневр реальний.
+    # Якщо наступна детекція повернулась до норми — pending був FP, скидається.
+    HYSTERESIS_MAH_SQ_THRESHOLD = 8.0   # поріг "підозри" (збігається з COV_RESET)
+    HYSTERESIS_CONFIRM_THRESHOLD = 5.0  # mah_sq наступної < цього → pending є FP
+    HYSTERESIS_WINDOW = 6               # максимум кадрів очікування підтвердження
+    COAST_THRESHOLD = 4                 # пропусків поспіль = "коастинг": висока
+                                        # mah_sq очікувана (P зросла природно),
+                                        # а не симптом маневру — не inflate, не defer
+
     def __init__(self, track_id, z_initial, dt, v_initial=None,
-                 initial_hits=1, min_hits=3):
+                 initial_hits=1, min_hits=3, enable_hysteresis=False):
         """
+        :param enable_hysteresis: вмикає Phase B delayed-accept hysteresis
+                            (відкладання підозрілих детекцій у _pending).
+                            Default False: на тест-даних гістерезис майже
+                            не вмикається, АЛЕ там, де вмикається, він
+                            канібалізує cov-reset (Step 2.A) та hit-тригер —
+                            усі три ділять поріг mah_sq=8, і defer обнуляє
+                            _last_mahalanobis_sq, тож наступний predict не
+                            бачить residual'у для hit-режиму. Тримаємо OFF,
+                            доки не доналаштуємо cov-reset+hit; coast-skip
+                            (через _missed_streak) лишається активним
+                            незалежно від прапорця — це обробка оклюзії,
+                            а не defer.
         :param v_initial:   опціональний 3-вектор початкових швидкостей.
                             Якщо передано — UKF-фільтри стартують зі
                             «справжнім» вектором швидкості замість нулів.
@@ -118,6 +199,7 @@ class Track:
         """
         self.track_id = track_id
         self.dt = float(dt)
+        self.enable_hysteresis = bool(enable_hysteresis)
         self.imm = create_imm_estimator(z_initial, dt, v_initial=v_initial)
 
         # Запам'ятовуємо ПЕРШУ детекцію — використовується для
@@ -137,21 +219,129 @@ class Track:
         # у get_dynamic_transition_matrix для активації hit-тригера у
         # наступному predict(). Скидається у 0 після кадрів без оновлень.
         self._last_mahalanobis_sq = 0.0
+        # Phase B: hysteresis state
+        self._pending = None               # Optional[Tuple[np.ndarray, float]]: (z, mah_sq)
+        self._pending_frames_elapsed = 0  # кадрів з моменту встановлення pending
+        self._missed_streak = 0           # послідовних mark_missed (для coast detection)
+        # 9D h_matrix: позиційні компоненти — індекси 0, 3, 6 у state
+        # [x, vx, ax, y, vy, ay, z, vz, az]. Швидкості та прискорення
+        # не вимірюються напряму, лише оцінюються через UKF.
         self.h_matrix = np.array([
-        [1, 0, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0]
+            [1, 0, 0, 0, 0, 0, 0, 0, 0],   # x
+            [0, 0, 0, 1, 0, 0, 0, 0, 0],   # y
+            [0, 0, 0, 0, 0, 0, 1, 0, 0],   # z
         ], dtype=float)
 
+    def _inflate_covariance(self):
+        """Inflate P[v,a] для всіх sub-фільтрів та IMM-агрегації."""
+        for f in self.imm.filters:
+            f.P[1, 1] += self.COV_RESET_INFLATE_V
+            f.P[4, 4] += self.COV_RESET_INFLATE_V
+            f.P[7, 7] += self.COV_RESET_INFLATE_V
+            f.P[2, 2] += self.COV_RESET_INFLATE_A
+            f.P[5, 5] += self.COV_RESET_INFLATE_A
+            f.P[8, 8] += self.COV_RESET_INFLATE_A
+        self.imm.P[1, 1] += self.COV_RESET_INFLATE_V
+        self.imm.P[4, 4] += self.COV_RESET_INFLATE_V
+        self.imm.P[7, 7] += self.COV_RESET_INFLATE_V
+        self.imm.P[2, 2] += self.COV_RESET_INFLATE_A
+        self.imm.P[5, 5] += self.COV_RESET_INFLATE_A
+        self.imm.P[8, 8] += self.COV_RESET_INFLATE_A
+
+    def _collapse_accel_to_ballistic(self):
+        """Занулює залишкове прискорення (індекси 2, 5, 8) у всіх станах.
+
+        Викликається при коастингу (mark_missed). Залишковий accel у 9D
+        CA-стані валідний лише поки його підтверджують виміри: без виміру
+        predict() інтегрує застаріле ax у швидкість щокадру (vx += ax·dt) →
+        трек РОЗГАНЯЄТЬСЯ і летить через увесь корт (аномалія кадрів
+        611-650: vX тікав −3.2 → −9.7 за 33 кадри оклюзії, X 7.2 → 2.4).
+        Фізично м'яч між контактами має нульовий залишковий accel — лише
+        g + drag, які вже driving-terms у fx_*. Колапс до балістики лишає
+        коастинг constant-velocity замість нестабільної CA-екстраполяції.
+        Швидкість/позиція не чіпаються (вони фізично виправдані), P також.
+        """
+        for f in self.imm.filters:
+            f.x[2] = f.x[5] = f.x[8] = 0.0
+            f.x_post[2] = f.x_post[5] = f.x_post[8] = 0.0
+        self.imm.x[2] = self.imm.x[5] = self.imm.x[8] = 0.0
+        self.imm.x_post[2] = self.imm.x_post[5] = self.imm.x_post[8] = 0.0
+
     def predict(self):
+        # 9D state: y = x[3], vy = x[4] (було 6D: x[2], x[3]).
         self.imm.M = get_dynamic_transition_matrix(
-            self.imm.x[2], self.imm.x[3],
+            self.imm.x[3], self.imm.x[4],
             mahalanobis_sq=self._last_mahalanobis_sq,
+            frames_since_update=self.time_since_update,
         )
         self.imm.predict()
-        self.time_since_update += 1
+        if self._pending is not None:
+            self._pending_frames_elapsed += 1
+            if self._pending_frames_elapsed > self.HYSTERESIS_WINDOW:
+                # Вікно підтвердження вичерпане — скидаємо pending і
+                # відновлюємо нормальне старіння.
+                self._pending = None
+                self._pending_frames_elapsed = 0
+                self.time_since_update += 1
+            # else: трек не старіє під час активного вікна hysteresis
+        else:
+            self.time_since_update += 1
 
     def update(self, z):
+        current_mah_sq = self._last_mahalanobis_sq
+
+        # ── Phase B: Delayed-accept hysteresis ────────────────────────────────
+        # Defer-механізм (pending) увімкнено лише при enable_hysteresis.
+        # Coast-skip (через _missed_streak) лишається активним завжди — це
+        # обробка повернення з оклюзії, а не відкладання детекції.
+        _coast_skip = False  # True → пропустити inflate та hysteresis-тригер
+
+        if self.enable_hysteresis and self._pending is not None:
+            pending_z, _ = self._pending
+            self._pending = None
+            self._pending_frames_elapsed = 0
+
+            if current_mah_sq >= self.HYSTERESIS_CONFIRM_THRESHOLD:
+                # Обидва кадри далеко від прогнозу → реальний маневр підтверджено.
+                # Inflate P + update з поточним z.
+                # pending_z (пізній вимір) не застосовуємо: подвійний imm.update()
+                # без predict() між ними порушує PD-властивість P → Cholesky fail.
+                # Inflate + поточний z достатньо для фіксації нової траєкторії.
+                self._inflate_covariance()
+                self.imm.update(z)
+                self.time_since_update = 0
+                self.hits += 1
+                self.hit_streak += 1
+                if self.state == 'Tentative' and self.hits >= self.min_hits:
+                    self.state = 'Confirmed'
+                self._missed_streak = 0
+                return
+
+            # mah_sq < CONFIRM_THRESHOLD → поточна детекція повернулась до
+            # нормальної траєкторії → pending був false-positive.
+            # Продовжуємо нормальним update без inflate та без нового тригера.
+            _coast_skip = True
+            self._missed_streak = 0
+
+        elif self._missed_streak >= self.COAST_THRESHOLD:
+            # Трек довго не бачив м'яча → висока mah_sq є ОЧІКУВАНОЮ
+            # (коваріація P зросла природно під час коастингу), а не
+            # ознакою маневру. Пропускаємо inflate і hysteresis-тригер.
+            _coast_skip = True
+            self._missed_streak = 0
+
+        elif (self.enable_hysteresis and z is not None
+              and current_mah_sq > self.HYSTERESIS_MAH_SQ_THRESHOLD):
+            # Підозріла детекція — відкладаємо її на підтвердження.
+            self._pending = (np.asarray(z, dtype=float).copy(), current_mah_sq)
+            self._pending_frames_elapsed = 0
+            self.imm.update(None)   # екстраполяція замість прийняття
+            self.hit_streak = 0
+            self._last_mahalanobis_sq = 0.0
+            self._missed_streak += 1
+            return
+        # ── End Phase B ────────────────────────────────────────────────────────
+
         # Mechanism A — Intra-track velocity bootstrap.
         # На переході hits=1 → 2 (тобто коли трек уперше отримує
         # ДРУГУ детекцію після створення) UKF-фільтри ще мали v=0 у
@@ -184,21 +374,38 @@ class Track:
                 # Так само переписуємо x_prior, бо саме він
                 # використовуватиметься у sigma-точках наступного
                 # predict.
+                # 9D state: швидкісні індекси [1, 4, 7] (було 6D: [1, 3, 5]).
+                # Accel-індекси (2, 5, 8) НЕ чіпаємо — лишаються 0 з
+                # create_imm_estimator (немає підстав bootstrap'ити).
                 for f in self.imm.filters:
                     f.x[1] = v_boot[0]
-                    f.x[3] = v_boot[1]
-                    f.x[5] = v_boot[2]
+                    f.x[4] = v_boot[1]
+                    f.x[7] = v_boot[2]
                     f.x_prior[1] = v_boot[0]
-                    f.x_prior[3] = v_boot[1]
-                    f.x_prior[5] = v_boot[2]
+                    f.x_prior[4] = v_boot[1]
+                    f.x_prior[7] = v_boot[2]
                 # mixed state теж оновлюємо.
                 self.imm.x[1] = v_boot[0]
-                self.imm.x[3] = v_boot[1]
-                self.imm.x[5] = v_boot[2]
+                self.imm.x[4] = v_boot[1]
+                self.imm.x[7] = v_boot[2]
                 self.imm.x_prior[1] = v_boot[0]
-                self.imm.x_prior[3] = v_boot[1]
-                self.imm.x_prior[5] = v_boot[2]
+                self.imm.x_prior[4] = v_boot[1]
+                self.imm.x_prior[7] = v_boot[2]
                 self._velocity_bootstrapped = True
+
+        # Step 2.A — Track-level covariance reset on radical residual.
+        # Виконується ПІСЛЯ Mechanism A bootstrap (щоб не конфліктувати:
+        # у bootstrap'ному кадрі м'яч ще не "робив" удар, він просто
+        # підхопив реальну швидкість), але ПЕРЕД imm.update(z).
+        # _coast_skip = True означає, що висока mah_sq є очікуваною
+        # (коастинг або resolved FP pending) — inflate не потрібен.
+        do_cov_reset = (
+            z is not None
+            and not _coast_skip
+            and self._last_mahalanobis_sq > self.COV_RESET_MAH_SQ_THRESHOLD
+        )
+        if do_cov_reset:
+            self._inflate_covariance()
 
         self.imm.update(z)
         self.time_since_update = 0
@@ -206,6 +413,7 @@ class Track:
         self.hit_streak += 1
         if self.state == 'Tentative' and self.hits >= self.min_hits:
             self.state = 'Confirmed'
+        self._missed_streak = 0
 
     def mark_missed(self):
         self.hit_streak = 0
@@ -213,7 +421,11 @@ class Track:
         # щоб у наступному predict() hit-тригер не активувався фантомно
         # з застарілих даних.
         self._last_mahalanobis_sq = 0.0
-        self.imm.update(None)  # Екстраполяція без вимірювання
+        self._missed_streak += 1  # Phase B: відстежуємо серію пропусків
+        self.imm.update(None)     # Екстраполяція без вимірювання
+        # Фікс кадрів 611-650: гасимо залишковий accel, щоб коастинг
+        # не розганявся через інтеграцію застарілого ax у швидкість.
+        self._collapse_accel_to_ballistic()
 
     def get_mahalanobis_distance(self, z, R_matrix):
         """
@@ -237,19 +449,32 @@ class Track:
 
 
 class IMMTracker:
-    def __init__(self, dt=0.02, max_age=150, min_hits=3, gating_threshold=11.34,
+    def __init__(self, dt=0.02, max_age=80, min_hits=3, gating_threshold=11.34,
                  bootstrap_max_gap_frames=5, bootstrap_max_dist=2.5,
-                 bootstrap_max_speed=35.0):
+                 bootstrap_max_speed=35.0, enable_hysteresis=False):
         """
         :param dt:                    крок часу (= 1 / FPS).
         :param max_age:               к-сть кадрів без оновлення до
-                                      видалення треку. Default 150 (= 3 с
-                                      при 50 FPS) — пiдiбраний sweep'ом
-                                      (logs/sweep_v1): на тестовому
-                                      сегменті дає lifeP90=325.6 кадрiв
-                                      (vs 214.8 для max_age=100 i
-                                      117.2 для legacy 50), при тiй
-                                      самiй фрагментацiї.
+                                      видалення треку.
+                                      Історія: 150 (sweep) → 15 (Plan A) →
+                                      80 (Phase B + edge-gate, чиста
+                                      розгортка).
+                                      Старий 150 давав 3-секундний
+                                      коастинг — підтверджений трек, що
+                                      втратив детекцію, балістично летiв
+                                      через увесь кадр i накопичував
+                                      "фантомнi" пiдтвердженi треки на
+                                      сміттєвих детекціях. Plan A зрізав до
+                                      15, щоб їх убити. Але edge-gate
+                                      (court-bounds у run_segment) тепер
+                                      прибирає самі викиди в джерелі, тож
+                                      головна причина для 15 зникла.
+                                      Розгортка з гейтом: 80 дає найкращу
+                                      fragmentation (0.235) + coverage
+                                      (0.907) при mode-switch 2.54 Гц
+                                      (нижче історичної бази ~3.5);
+                                      повний ~13-сек трек відновлюється.
+                                      100 доміновано 80-кою.
         :param min_hits:              к-сть кадрів для підтвердження
                                       треку (Tentative → Confirmed).
         :param gating_threshold:      χ²-поріг гейтингу Махаланобіса
@@ -271,6 +496,11 @@ class IMMTracker:
                                       двох різних об'єктів). Default 35
                                       м/с — приблизна верхня межа подачі
                                       елітного м'яча у волейболі.
+        :param enable_hysteresis:     вмикає Phase B delayed-accept
+                                      hysteresis у кожному Track. Default
+                                      False (див. Track.__init__ — defer
+                                      канібалізує cov-reset+hit). Прокидається
+                                      з run_segment через --enable_hysteresis.
         """
         self.dt = dt
         self.max_age = max_age
@@ -280,10 +510,13 @@ class IMMTracker:
         self.bootstrap_max_gap_frames = int(bootstrap_max_gap_frames)
         self.bootstrap_max_dist = float(bootstrap_max_dist)
         self.bootstrap_max_speed = float(bootstrap_max_speed)
+        self.enable_hysteresis = bool(enable_hysteresis)
 
         self.tracks = []
         self.next_id = 1
-        self.R_matrix = np.diag([0.01, 0.01, 0.04])  # Базова матриця похибки
+        # Матриця для гейтингу Махаланобіса. Узгоджуємо з R_init у
+        # create_imm_estimator (σ_z ≈ 0.7 м для моно-камерної глибини).
+        self.R_matrix = np.diag([0.02, 0.02, 0.5])
 
         # Ring-буфер невідповідних (unassigned) детекцій з кількох останніх
         # кадрів. Використовується для bootstrap'у швидкості при створенні
@@ -402,7 +635,8 @@ class IMMTracker:
             self.tracks.append(
                 Track(self.next_id, z_now_arr, self.dt,
                       v_initial=best_v, initial_hits=2,
-                      min_hits=self.min_hits)
+                      min_hits=self.min_hits,
+                      enable_hysteresis=self.enable_hysteresis)
             )
             self.next_id += 1
             # Видаляємо використану spawn-точку.
@@ -412,7 +646,8 @@ class IMMTracker:
             # у буфер для майбутнього bootstrap'у.
             self.tracks.append(
                 Track(self.next_id, z_now_arr, self.dt,
-                      min_hits=self.min_hits)
+                      min_hits=self.min_hits,
+                      enable_hysteresis=self.enable_hysteresis)
             )
             self.next_id += 1
             self._spawn_buffer.append(

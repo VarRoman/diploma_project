@@ -117,7 +117,8 @@ def extract_track_series(frames: List[Dict[str, Any]],
     Витягуємо часові ряди для конкретного track_id. Кадри, в яких треку
     нема, заповнюємо NaN — щоб у matplotlib з'явилися прогалини.
 
-    Стан-вектор у фільтрі: [x, vx, y, vy, z, vz].
+    Стан-вектор у фільтрі (9D CA-IMM): [x, vx, ax, y, vy, ay, z, vz, az].
+    Позиції — індекси 0, 3, 6; швидкості — 1, 4, 7; прискорення — 2, 5, 8.
     """
     n = len(frames)
     t = np.full(n, np.nan, dtype=float)
@@ -126,7 +127,8 @@ def extract_track_series(frames: List[Dict[str, Any]],
     post_x = np.full(n, np.nan); post_vx = np.full(n, np.nan)
     post_y = np.full(n, np.nan); post_vy = np.full(n, np.nan)
     post_z = np.full(n, np.nan); post_vz = np.full(n, np.nan)
-    P_diag = np.full((n, 6), np.nan)
+    # P_diag тепер 9D: діагональ коваріації 9×9 матриці стану.
+    P_diag = np.full((n, 9), np.nan)
     mu_ball = np.full(n, np.nan); mu_hit = np.full(n, np.nan); mu_bnc = np.full(n, np.nan)
     mahal = np.full(n, np.nan)
     res_norm = np.full(n, np.nan)
@@ -143,9 +145,11 @@ def extract_track_series(frames: List[Dict[str, Any]],
         for tr in fr.get("tracks", []):
             if int(tr["track_id"]) == track_id:
                 xp = tr["x_post"]
+                # 9D state: [x, vx, ax, y, vy, ay, z, vz, az]
+                # позиції — індекси 0, 3, 6; швидкості — 1, 4, 7.
                 post_x[i], post_vx[i] = xp[0], xp[1]
-                post_y[i], post_vy[i] = xp[2], xp[3]
-                post_z[i], post_vz[i] = xp[4], xp[5]
+                post_y[i], post_vy[i] = xp[3], xp[4]
+                post_z[i], post_vz[i] = xp[6], xp[7]
                 pd = tr.get("P_post_diag")
                 if pd is not None:
                     P_diag[i] = pd

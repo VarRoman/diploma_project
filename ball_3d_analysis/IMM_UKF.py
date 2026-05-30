@@ -603,67 +603,105 @@ def logpdf(x, mean=None, cov=1, allow_singular=True):
 
 
 def fx_ballistic(x, dt):
-    """Балістична нелінійна модель: x_next = F*x * gravity_effect
-    F-матриця для [x, vx, y, vy, z, vz]"""
-    vx, vy, vz = x[1], x[3], x[5]
-    vx = np.clip(vx, -40.0, 40.0)
-    vy = np.clip(vy, -40.0, 40.0)
-    vz = np.clip(vz, -40.0, 40.0)
+    """
+    9D балістична модель (CV-CA-IMM): state = [x, vx, ax, y, vy, ay, z, vz, az].
 
-    F = np.array([[1, dt, 0, 0,  0,  0],                  # x
-                  [0, 1,  0, 0,  0,  0],                  # vx
-                  [0, 0,  1, dt, 0,  0],                  # y
-                  [0, 0,  0, 1,  0,  0],                  # vy
-                  [0, 0,  0, 0,  1,  dt],                 # z
-                  [0, 0,  0, 0,  0,  1]], dtype=float)    # vz
+    Гравітація — driving term (-g по Y), не входить у state.
+    Квадратичний drag — також driving term: a_drag = -k·|v|·v.
+    State-компоненти ax, ay, az — "залишкове" прискорення: ≈0 у чистій
+    балістиці, ≠0 під час удару/блоку (накопичується через великий Q[a]
+    у hit-моделі). Інтерпретованість: |a_state| ↔ сила маневру.
 
-    B = np.diag([0.5 * dt**2, dt, 0.5 * dt**2, dt, 0.5 * dt**2, dt])
+    Дискретизація constant-acceleration:
+        p_new = p + v·dt + 0.5·a_total·dt^2
+        v_new = v + a_total·dt
+        a_new = a (детермінованно — змінюється лише через Q[a] шум).
+
+    Step 2.B (Phase 3): переведено з 6D CV+driving-gravity на 9D CA.
+    """
+    vx = np.clip(x[1], -40.0, 40.0)
+    vy = np.clip(x[4], -40.0, 40.0)
+    vz = np.clip(x[7], -40.0, 40.0)
+    ax_s, ay_s, az_s = x[2], x[5], x[8]
+
     k = 0.0314
-    v_mag = np.sqrt(x[1]**2 + x[3]**2 + x[5]**2)
-    a_dx = -k * v_mag * vx
-    a_dy = -k * v_mag * vy
-    a_dz = -k * v_mag * vz
-    u = np.array([a_dx, a_dx, a_dy - 9.81, a_dy - 9.81, a_dz, a_dz])
+    v_mag = np.sqrt(vx**2 + vy**2 + vz**2)
+    a_drag_x = -k * v_mag * vx
+    a_drag_y = -k * v_mag * vy
+    a_drag_z = -k * v_mag * vz
 
-    x_next = np.dot(F, x) + np.dot(B, u)
+    g = 9.81
+    a_tot_x = ax_s + a_drag_x
+    a_tot_y = ay_s + a_drag_y - g
+    a_tot_z = az_s + a_drag_z
 
-    return x_next
+    return np.array([
+        x[0] + vx*dt + 0.5*a_tot_x*dt**2,
+        vx + a_tot_x*dt,
+        ax_s,
+        x[3] + vy*dt + 0.5*a_tot_y*dt**2,
+        vy + a_tot_y*dt,
+        ay_s,
+        x[6] + vz*dt + 0.5*a_tot_z*dt**2,
+        vz + a_tot_z*dt,
+        az_s,
+    ])
+
 
 def fx_hit(x, dt):
     """
-    Модель удару: Constant Velocity.
-    Стан: [x, vx, y, vy, z, vz]
-    """
-    F = np.array([[1, dt, 0, 0,  0,  0],
-                  [0, 1,  0, 0,  0,  0],
-                  [0, 0,  1, dt, 0,  0],
-                  [0, 0,  0, 1,  0,  0],
-                  [0, 0,  0, 0,  1,  dt],
-                  [0, 0,  0, 0,  0,  1]], dtype=float)
+    9D модель удару: структурно ідентична fx_ballistic (CA з гравітацією
+    + drag). Відмінність — у Q-матриці (create_imm_estimator): hit-mode
+    має значно більшу Q[a], що дозволяє accel "прокинутись" від ~0 до
+    імпульсних значень за один-два кадри. Так удар/блок "запам'ятовується"
+    як ненульовий accel у state, замість випадкового дрейфу швидкості
+    через великий Q[v] у старій 6D-версії.
 
-    return np.dot(F, x)
+    Це класична CV-CA-IMM конфігурація з двома рівнями шуму прискорення
+    (low для балістики, high для маневру). IMMEstimator розрізняє моделі
+    через likelihood, що залежить від P (а P залежить від Q).
+    """
+    return fx_ballistic(x, dt)
+
 
 def fx_bounce(x, dt):
-    """Модель відскоку, марковська матриця"""
-    epsilon = 0.75 # Коефіцієнт реституції
-    friction = 0.85 # Коефіцієнт тертя
+    """
+    9D модель відскоку від підлоги: інверсія vy із epsilon=0.75,
+    тертя vx/vz із friction=0.85. Accel скидається у 0 — відскок це
+    детермінований імпульс, що "очищує" попередню історію accel
+    (контактна сила реалізується через зміну швидкості, не через
+    залишкове прискорення).
+    """
+    epsilon = 0.75
+    friction = 0.85
     x_next = np.copy(x)
     vx_new = x[1] * friction
-    vy_new = -x[3] * epsilon
-    vz_new = x[5] * friction
+    vy_new = -x[4] * epsilon
+    vz_new = x[7] * friction
 
     x_next[0] += vx_new * dt
-    x_next[2] += vy_new * dt
-    x_next[4] += vz_new * dt
+    x_next[3] += vy_new * dt
+    x_next[6] += vz_new * dt
 
     x_next[1] = vx_new
-    x_next[3] = vy_new
-    x_next[5] = vz_new
+    x_next[4] = vy_new
+    x_next[7] = vz_new
+
+    # Скидаємо залишкове прискорення — відскок це "новий старт".
+    x_next[2] = 0.0
+    x_next[5] = 0.0
+    x_next[8] = 0.0
 
     return x_next
 
+
 def hx(x):
-    return np.array([x[0], x[2], x[4]])
+    """
+    Вимірювальна функція 9D → 3D: видобуваємо лише позиції (індекси 0, 3, 6).
+    Швидкості (1, 4, 7) та прискорення (2, 5, 8) — не вимірюються, лише
+    оцінюються через UKF/IMM.
+    """
+    return np.array([x[0], x[3], x[6]])
 
 def measurement_transform(prediction_data, K, R_matrix, camera_pos,
                           ball_diameter=0.21):
@@ -690,7 +728,10 @@ def measurement_transform(prediction_data, K, R_matrix, camera_pos,
 def get_dynamic_transition_matrix(y, vy,
                                   mahalanobis_sq=0.0,
                                   hit_residual_min_sq=8.0,
-                                  hit_residual_max_sq=11.34):
+                                  hit_residual_max_sq=11.34,
+                                  bounce_height_max=0.55,
+                                  frames_since_update=0,
+                                  bounce_max_coast=3):
     """
     Повертає марковську матрицю 3x3 переходів IMM для моделей
     [Ballistic, Hit, Bounce] на наступний крок передбачення.
@@ -701,9 +742,16 @@ def get_dynamic_transition_matrix(y, vy,
     Тригери:
 
     1) **Bounce** — пасивний геометричний тригер. Якщо м'яч близько до
-       підлоги (y < 0.3 м у вертикальній конвенції Y-вверх) і рухається
-       вниз (vy < 0), наступний крок різко зміщає Markov-матрицю до
-       Bounce-режиму. Це історичний тригер, переніс зі старої версії.
+       підлоги (y < bounce_height_max) і рухається вниз (vy < 0),
+       наступний крок різко зміщає Markov-матрицю до Bounce-режиму.
+       Поріг підняли 0.3 → 0.55 (2026-05-30): аудит епізоду відбиття
+       (кадри 275-290) показав, що ТРЕКОВАНА висота на дні відбиття
+       опускається лише до ~0.35 м (raw min ~0.61 м) — стара межа 0.3
+       НІКОЛИ не спрацьовувала, тож mu_bounce залишався ~0.01 і реверс
+       vy "витягувала" балістична модель за 3 кадри (пізно + рвано).
+       0.55 ловить дно відбиття з запасом; умова vy<0 гарантує, що після
+       відскоку (vy>0) тригер вимикається й не реверсить швидкість
+       повторно.
 
     2) **Mid-air hit** — тригер за residual'ом. Активується тільки коли
        квадрат Mahalanobis'а останньої прийнятої детекції потрапляє у
@@ -740,7 +788,14 @@ def get_dynamic_transition_matrix(y, vy,
 
     # Тригер 1: bounce при контакті з підлогою. Має найвищий пріоритет —
     # після відскоку інформація з residual'у про "удар" не має сенсу.
-    if y < 0.3 and vy < 0:
+    # Умова frames_since_update <= bounce_max_coast: тригерити відскок ЛИШЕ
+    # коли позиція підкріплена свіжою детекцією. Без цього (аудит 2026-05-30)
+    # тригер вистрелював на ФАНТОМНИХ коастинг-траєкторіях: трек, що загубив
+    # м'яч, екстраполює вниз під гравітацією, Y падає <0.55, і bounce-режим
+    # "відскакує" уявний м'яч (tsu=17-80), хоча реальний м'яч уже за 4-5 м
+    # угорі. Реальний відскок має tsu≈0. Це розколювало цілісні треки на
+    # уламки (fragmentation 0.235→0.412).
+    if y < bounce_height_max and vy < 0 and frames_since_update <= bounce_max_coast:
         M[0] = [0.10, 0.05, 0.85]
         M[1] = [0.10, 0.05, 0.85]
         return M

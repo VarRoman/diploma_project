@@ -123,17 +123,19 @@ def build_track_infos(frames: List[Dict[str, Any]]) -> Dict[int, TrackInfo]:
             if tid < 0:
                 continue
             x_post = tr.get("x_post") or []
-            if len(x_post) < 6:
+            # 9D state: [x, vx, ax, y, vy, ay, z, vz, az]
+            # pos = indices 0, 3, 6; vel = indices 1, 4, 7.
+            if len(x_post) < 9:
                 continue
             info = infos.get(tid)
             if info is None:
                 info = TrackInfo(track_id=tid, first_frame=k)
                 infos[tid] = info
             info.last_frame = k
-            info.positions[k] = (float(x_post[0]), float(x_post[2]),
-                                 float(x_post[4]))
-            info.velocities[k] = (float(x_post[1]), float(x_post[3]),
-                                  float(x_post[5]))
+            info.positions[k] = (float(x_post[0]), float(x_post[3]),
+                                 float(x_post[6]))
+            info.velocities[k] = (float(x_post[1]), float(x_post[4]),
+                                  float(x_post[7]))
             state = str(tr.get("state", "?"))
             info.states[k] = state
             if state == "Confirmed":
@@ -471,10 +473,11 @@ def draw_rally_hud(
     # 3D + швидкість
     if track_rec is not None:
         x_post = track_rec.get("x_post") or []
-        if len(x_post) >= 6:
+        # 9D state: pos = 0, 3, 6; vel = 1, 4, 7. Accel (2, 5, 8) ігноруємо в HUD.
+        if len(x_post) >= 9:
             x, vx, yy, vy, z, vz = (float(x_post[0]), float(x_post[1]),
-                                    float(x_post[2]), float(x_post[3]),
-                                    float(x_post[4]), float(x_post[5]))
+                                    float(x_post[3]), float(x_post[4]),
+                                    float(x_post[6]), float(x_post[7]))
             v_norm = math.sqrt(vx * vx + vy * vy + vz * vz)
             pos_str = f"pos: x={x:+6.2f}m  y={yy:+5.2f}m  z={z:+6.2f}m"
             vel_str = (f"v:   |v|={v_norm:5.2f} m/s "
@@ -553,9 +556,10 @@ def draw_active_track(
         return None
 
     x_post = target_tr.get("x_post") or []
-    if len(x_post) < 6:
+    # 9D state: pos = indices 0, 3, 6.
+    if len(x_post) < 9:
         return None
-    P3d = np.array([x_post[0], x_post[2], x_post[4]], dtype=np.float64)
+    P3d = np.array([x_post[0], x_post[3], x_post[6]], dtype=np.float64)
     uv = project_3d_to_pixel(P3d, R, tvec, K, W, H)
     if uv is None:
         return None

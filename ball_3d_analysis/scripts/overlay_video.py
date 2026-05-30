@@ -19,9 +19,10 @@ YOLO + IMMTracker на оригінальне відео.
 Що накладається на кожен кадр:
     1. YOLO bbox (зелений квадрат w_box×w_box навколо центру), якщо
        у JSONL є raw_detection.detected=True.
-    2. Точка трекера: 3D-стан x_post[(0,2,4)] репроєктується у пікселі
-       через cv2.projectPoints(rvec=Rodrigues(R)[0], tvec, K). Малюємо
-       заповнене коло з кольором, унікальним для track_id.
+    2. Точка трекера: 3D-стан x_post[(0,3,6)] (9D CA-state — позиції на
+       індексах 0, 3, 6; решта — швидкості та прискорення) репроєктується
+       у пікселі через cv2.projectPoints(rvec=Rodrigues(R)[0], tvec, K).
+       Малюємо заповнене коло з кольором, унікальним для track_id.
     3. Trail: останні --trail_len 2D-координат того ж track_id —
        polylines з alpha-blend (хвіст напівпрозорий).
     4. Лейбл біля точки: "T{id} {state} mu={B/H/Bn} mah={x:.1f}".
@@ -411,10 +412,11 @@ def main() -> int:
             n_with_track += 1
         for tr in selected:
             x_post = tr.get("x_post")
-            if not x_post or len(x_post) < 6:
+            # 9D state: pos = indices 0, 3, 6.
+            if not x_post or len(x_post) < 9:
                 continue
             P3d = np.array(
-                [x_post[0], x_post[2], x_post[4]], dtype=np.float64
+                [x_post[0], x_post[3], x_post[6]], dtype=np.float64
             )
             uv = project_3d_to_pixel(P3d, R, tvec, K, W, H)
             if uv is None:
