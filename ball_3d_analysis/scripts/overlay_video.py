@@ -242,7 +242,9 @@ def draw_track(img: np.ndarray, u: int, v: int,
                track_rec: Dict[str, Any], color: BGR) -> None:
     """
     Заповнене коло радіусу 6 + лейбл праворуч-зверху від точки.
-    Лейбл: "T{id} {state} mu={B/H/Bn} [mah={x:.1f}]".
+    Перший рядок: "T{id} {state} mu={B/H/Bn} [mah={x:.1f}]".
+    Другий рядок: 3D-позиція фільтра у метрах "(x, y, z)m" — те, що
+    наша IMM/UKF-модель «вважає» поточним положенням м'яча у просторі.
     """
     cv2.circle(img, (u, v), 6, color, thickness=-1, lineType=cv2.LINE_AA)
     cv2.circle(img, (u, v), 6, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
@@ -258,21 +260,43 @@ def draw_track(img: np.ndarray, u: int, v: int,
         parts.append(f"mah={float(mah_sq):.1f}")
     label = " ".join(parts)
 
-    org = (u + 10, v - 10)
-    # outline
-    cv2.putText(img, label, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                (0, 0, 0), thickness=3, lineType=cv2.LINE_AA)
-    cv2.putText(img, label, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                color, thickness=1, lineType=cv2.LINE_AA)
+    # Другий рядок — 3D-позиція фільтра (x=ширина, y=висота, z=довжина).
+    label2 = None
+    x_post = track_rec.get("x_post")
+    if x_post and len(x_post) >= 9:
+        label2 = (f"filt ({x_post[0]:+.2f}, {x_post[3]:+.2f}, "
+                  f"{x_post[6]:+.2f})m")
+
+    def _put(text: str, org: Tuple[int, int]) -> None:
+        cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (0, 0, 0), thickness=3, lineType=cv2.LINE_AA)
+        cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    color, thickness=1, lineType=cv2.LINE_AA)
+
+    _put(label, (u + 10, v - 10))
+    if label2 is not None:
+        _put(label2, (u + 10, v + 8))
 
 
 def draw_hud(img: np.ndarray,
              k: int, n_total: int, t_sec: float,
-             n_tracks: int, n_confirmed: int, fps: float) -> None:
-    """Напівпрозора плашка top-left, 3 рядки."""
+             n_tracks: int, n_confirmed: int, fps: float,
+             yolo_3d: Optional[List[float]] = None,
+             filt_3d: Optional[List[float]] = None) -> None:
+    """
+    Напівпрозора плашка top-left. Базові 3 рядки + (за наявності) два
+    рядки з поточною 3D-позицією у метрах: від YOLO (промінь крізь
+    детекцію) та від нашого IMM/UKF-фільтра. Формат (x, y, z) =
+    (ширина, висота, довжина).
+    """
     pad = 8
-    w = 340
-    h = 78
+    w = 360
+    extra = 0
+    if yolo_3d is not None:
+        extra += 22
+    if filt_3d is not None:
+        extra += 22
+    h = 78 + extra
     overlay = img.copy()
     cv2.rectangle(overlay, (0, 0), (w, h), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.55, img, 0.45, 0.0, dst=img)
@@ -284,6 +308,19 @@ def draw_hud(img: np.ndarray,
     for ln in (line1, line2, line3):
         cv2.putText(img, ln, (pad, y), cv2.FONT_HERSHEY_SIMPLEX,
                     0.55, (255, 255, 255), 1, cv2.LINE_AA)
+        y += 22
+
+    if yolo_3d is not None:
+        txt = (f"YOLO 3D: ({yolo_3d[0]:+.2f}, {yolo_3d[1]:+.2f}, "
+               f"{yolo_3d[2]:+.2f})m")
+        cv2.putText(img, txt, (pad, y), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55, (120, 255, 120), 1, cv2.LINE_AA)
+        y += 22
+    if filt_3d is not None:
+        txt = (f"FILT 3D: ({filt_3d[0]:+.2f}, {filt_3d[1]:+.2f}, "
+               f"{filt_3d[2]:+.2f})m")
+        cv2.putText(img, txt, (pad, y), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55, (120, 200, 255), 1, cv2.LINE_AA)
         y += 22
 
 
@@ -410,6 +447,9 @@ def main() -> int:
         )
         if selected:
             n_with_track += 1
+        # Репрезентативна 3D-позиція фільтра для HUD: пріоритет
+        # Confirmed-треку, інакше — перший намальований.
+        hud_filt_3d: Optional[List[float]] = None
         for tr in selected:
             x_post = tr.get("x_post")
             # 9D state: pos = indices 0, 3, 6.
@@ -426,6 +466,18 @@ def main() -> int:
             trails[tid].append(uv)
             draw_trail(img, list(trails[tid]), color)
             draw_track(img, uv[0], uv[1], tr, color)
+            cand = [x_post[0], x_post[3], x_post[6]]
+            if hud_filt_3d is None or tr.get("state") == "Confirmed":
+                hud_filt_3d = cand
+
+        # YOLO 3D — промінь крізь поточну детекцію (frame-level raw_3d).
+        raw_3d = rec.get("raw_3d")
+        hud_yolo_3d: Optional[List[float]] = None
+        if raw_3d and len(raw_3d) >= 3 and all(
+            x is not None for x in raw_3d[:3]
+        ):
+            hud_yolo_3d = [float(raw_3d[0]), float(raw_3d[1]),
+                           float(raw_3d[2])]
 
         # 3) HUD
         draw_hud(
@@ -436,6 +488,8 @@ def main() -> int:
             n_tracks=int(rec.get("n_tracks", 0)),
             n_confirmed=int(rec.get("n_confirmed", 0)),
             fps=fps,
+            yolo_3d=hud_yolo_3d,
+            filt_3d=hud_filt_3d,
         )
 
         writer.write(img)

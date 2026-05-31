@@ -136,9 +136,11 @@ def parse_args() -> argparse.Namespace:
                         "(0.235) + coverage (0.907) при mode-switch 2.54 Гц.")
     p.add_argument("--min_hits", type=int, default=3,
                    help="IMMTracker.min_hits (default 3).")
-    p.add_argument("--gating", type=float, default=11.34,
-                   help="χ²-поріг гейтингу Махаланобіса (default 11.34, "
-                        "df=3, p=0.99).")
+    p.add_argument("--gating", type=float, default=16.0,
+                   help="χ²-поріг гейтингу Махаланобіса (default 16.0). "
+                        "χ²₃ p=0.99 = 11.34, але 16.0 пускає прикордонні "
+                        "детекції маневру (mah 12-15) асоціюватись — оживляє "
+                        "hit-режим без зростання проліферації треків.")
     p.add_argument("--floor_eps", type=float, default=-0.5,
                    help="Якщо raw_3d[1] (Y, висота) < floor_eps — детекція "
                         "відкидається як фізично неможлива. Default -0.5 m.")
@@ -153,6 +155,13 @@ def parse_args() -> argparse.Namespace:
                         "обвал bbox_w роздуває Z_c і кидає точку за зал. "
                         "Default 3.0 m (запас на ігрову зону за лініями). "
                         "Встановіть велике значення (напр. 99) щоб вимкнути.")
+    p.add_argument("--enable_cov_reset", action="store_true",
+                   help="Увімкнути Step 2.A covariance reset. За замовч. "
+                        "ВИМКНЕНО (Path B): cov-reset снапить маневр за 1 "
+                        "кадр і короутить IMM hit-режим. Вимкнений — лишає "
+                        "residual'у 1-2 кадри → hit-тригер встигає вистрілити "
+                        "→ real μ_hit росте 0.12→0.41 через IMM-likelihood. "
+                        "Увімкнення повертає старий 1-кадровий cov-reset.")
     p.add_argument("--enable_hysteresis", action="store_true",
                    help="Увімкнути Phase B delayed-accept hysteresis "
                         "(відкладання підозрілих детекцій). Default OFF: "
@@ -161,6 +170,32 @@ def parse_args() -> argparse.Namespace:
                         "наступного predict). Тримаємо OFF, доки не "
                         "доналаштуємо cov-reset+hit. Coast-skip працює "
                         "незалежно від прапорця.")
+    p.add_argument("--disable_single_ball_nms", action="store_true",
+                   help="Вимкнути Phase C single-ball NMS. За замовч. "
+                        "увімкнено: домен — один м'яч, тож лишаємо лише "
+                        "ОДИН Confirmed-трек (найкращий за tsu/hits/mah), "
+                        "решту понижуємо до Tentative. Прибирає фантом-"
+                        "дублі від сміттєвих спавнів і дивергентного "
+                        "коастингу (~20%% кадрів мали 2 confirmed на 1 м'яч).")
+    p.add_argument("--disable_physical_gate", action="store_true",
+                   help="Вимкнути Gate A — коваріаційно-незалежний стелаж на "
+                        "евклідів residual ||z − прогноз||. За замовч. "
+                        "увімкнено: Mahalanobis-гейт залежить від P, а P "
+                        "роздувається під час коастингу (tsu=47 → P_pos ~80-"
+                        "130) → телепорт на FP за 8 м дає mah≈0.7 < гейт і "
+                        "ПРИЙМАЄТЬСЯ (катастрофа fr763/807/86). Фіксований "
+                        "стелаж незалежний від коастингу й ловить це.")
+    p.add_argument("--max_assoc_residual", type=float, default=3.0,
+                   help="Поріг Gate A (м). Розподіл прийнятих апдейтів: "
+                        "реальний-маневр максимум ≈2.2 м, чиста прірва до "
+                        "найближчого телепорта 5.95 м. Default 3.0.")
+    p.add_argument("--enable_coast_cov_cap", action="store_true",
+                   help="Gate C (ЕКСПЕРИМЕНТ, default OFF) — кап росту "
+                        "P-діагоналі під час коастингу. Робить хвіст коастингу "
+                        "падучим замість замерзлого, але на довгих сліпих "
+                        "коастах (60-80 кадрів без детекцій) малює переконливу "
+                        "фікцію падіння з заниженого апекса → відкочено в "
+                        "opt-in. Корінь заниженого апекса — драг, не P.")
     p.add_argument("--save_calibration", action="store_true",
                    help="Записати в header (перший рядок JSONL) усі "
                         "калібрувальні матриці для відтворюваності.")
@@ -369,6 +404,11 @@ def main() -> int:
         min_hits=args.min_hits,
         gating_threshold=args.gating,
         enable_hysteresis=args.enable_hysteresis,
+        enable_cov_reset=args.enable_cov_reset,
+        enable_single_ball_nms=not args.disable_single_ball_nms,
+        enable_physical_gate=not args.disable_physical_gate,
+        max_assoc_residual=args.max_assoc_residual,
+        enable_coast_cov_cap=args.enable_coast_cov_cap,
     )
 
     # 5. Перемотування на початковий кадр.
@@ -397,6 +437,11 @@ def main() -> int:
             "ceiling_max": args.ceiling_max,
             "court_margin": args.court_margin,
             "enable_hysteresis": args.enable_hysteresis,
+            "enable_cov_reset": args.enable_cov_reset,
+            "enable_single_ball_nms": not args.disable_single_ball_nms,
+            "enable_physical_gate": not args.disable_physical_gate,
+            "max_assoc_residual": args.max_assoc_residual,
+            "enable_coast_cov_cap": args.enable_coast_cov_cap,
         },
         "frame_size": [width, height],
     }

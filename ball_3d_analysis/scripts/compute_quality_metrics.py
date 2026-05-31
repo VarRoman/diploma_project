@@ -202,17 +202,27 @@ def compute_fragmentation(
     max_gap: int,
 ) -> Dict[str, float]:
     """
-    fragmentation = n_tracks / n_detection_runs.
+    fragmentation = n_tracks_confirmed / n_detection_runs.
     n_detection_runs — група детекцій, де між сусідніми <= max_gap кадрів.
+
+    Рахуємо лише треки, що БУЛИ Confirmed — це реальні шматки траєкторії.
+    Tentative-спавни (hits 1-2, відкинуті як шум/фантоми) НЕ є фрагментами
+    траєкторії; їх включення штучно роздувало б метрику (особливо при
+    gate=16 + single-ball NMS, де маневр породжує короткі Tentative-
+    конкуренти). n_tracks_total лишаємо для довідки.
     """
     det_frames = [
         int(fr.get("frame_0based", fr.get("frame", 0)))
         for fr in frames if (fr.get("raw_detection") or {}).get("detected")
     ]
     det_frames.sort()
+    n_confirmed = sum(
+        1 for d in tracks.values() if "Confirmed" in set(d.states)
+    )
     if not det_frames:
         return {
             "n_tracks_total": len(tracks),
+            "n_tracks_confirmed": n_confirmed,
             "n_detection_runs": 0,
             "fragmentation": float("nan"),
         }
@@ -222,8 +232,9 @@ def compute_fragmentation(
             n_runs += 1
     return {
         "n_tracks_total": len(tracks),
+        "n_tracks_confirmed": n_confirmed,
         "n_detection_runs": n_runs,
-        "fragmentation": len(tracks) / n_runs,
+        "fragmentation": n_confirmed / n_runs,
     }
 
 

@@ -167,9 +167,33 @@ class Track:
                                         # mah_sq очікувана (P зросла природно),
                                         # а не симптом маневру — не inflate, не defer
 
+    # Coast covariance cap. Під час коастингу P росте необмежено (вимір.
+    # дані: P_vel 2.5→700, P_pos 0→243, P_acc→1330 за 57 кадрів). При
+    # P_vel~300-700 sigma-точки UKF розповзаються на ±17-26 м/с, і
+    # КВАДРАТИЧНИЙ drag (a=-k·|v|·v у fx_ballistic) через нерівність Єнсена
+    # тягне sigma-mean швидкості до нуля, ПЕРЕБИВАЮЧИ лінійний gravity-term
+    # (-g) → vy замерзає (~-1 м/с) замість розгону вниз → трек «висить»
+    # замість балістичної дуги (tid4 завис на y=8 м усі 80 кадрів коастингу
+    # замість падіння під гравітацією). Кап тримає sigma-точки тісними →
+    # gravity знову домінує → чиста парабола поза кадром. Капи на рівні
+    # P_init (vel) / cov-reset (acc); pos=9 (±3 м) узгоджено з Gate A
+    # residual-стелажем, тримає Mahalanobis-гейт осмисленим на коастингу.
+    COAST_P_POS_CAP = 9.0    # (м²) — ±3 м, = Gate A max_assoc_residual
+    COAST_P_VEL_CAP = 50.0   # (м/с)² — = P_init[v]
+    COAST_P_ACC_CAP = 100.0  # (м/с²)² — = COV_RESET_INFLATE_A
+
     def __init__(self, track_id, z_initial, dt, v_initial=None,
-                 initial_hits=1, min_hits=3, enable_hysteresis=False):
+                 initial_hits=1, min_hits=3, enable_hysteresis=False,
+                 enable_cov_reset=False, enable_coast_cov_cap=False):
         """
+        :param enable_cov_reset: вмикає Step 2.A track-level covariance reset
+                            (inflate P[v,a] при mah_sq>поріг). Default False
+                            (Path B). Вимкнення лишає residual "пожити" 1-2
+                            кадри після маневру → hit-тригер встигає
+                            вистрілити і IMM-likelihood підіймає μ_hit.
+                            Увімкнений cov-reset снапить маневр за 1 кадр і
+                            короутить IMM-режими (cov-reset і hit —
+                            субститути за один і той самий residual-сигнал).
         :param enable_hysteresis: вмикає Phase B delayed-accept hysteresis
                             (відкладання підозрілих детекцій у _pending).
                             Default False: на тест-даних гістерезис майже
@@ -200,6 +224,8 @@ class Track:
         self.track_id = track_id
         self.dt = float(dt)
         self.enable_hysteresis = bool(enable_hysteresis)
+        self.enable_cov_reset = bool(enable_cov_reset)
+        self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
         self.imm = create_imm_estimator(z_initial, dt, v_initial=v_initial)
 
         # Запам'ятовуємо ПЕРШУ детекцію — використовується для
@@ -266,6 +292,36 @@ class Track:
             f.x_post[2] = f.x_post[5] = f.x_post[8] = 0.0
         self.imm.x[2] = self.imm.x[5] = self.imm.x[8] = 0.0
         self.imm.x_post[2] = self.imm.x_post[5] = self.imm.x_post[8] = 0.0
+
+    @staticmethod
+    def _cap_P_matrix(P, caps):
+        """PD-безпечний кап діагоналі P до caps[i]. Для кожного i з
+        P[i,i] > caps[i] масштабуємо рядок І стовпець i на s=√(cap/P[i,i]).
+        Це конгруентне перетворення D·P·D (D=diag, d_i=s), що ЗБЕРІГАЄ
+        додатну визначеність (на відміну від наївного P[i,i]=cap, яке при
+        великих позадіагональних кореляціях ламає PD → Cholesky-збій у
+        sigma-точках UKF). Off-діагоналі масштабуються пропорційно, тож
+        кореляційна структура лишається валідною."""
+        for i in range(P.shape[0]):
+            if P[i, i] > caps[i]:
+                s = np.sqrt(caps[i] / P[i, i])
+                P[i, :] *= s
+                P[:, i] *= s
+
+    def _cap_coast_covariance(self):
+        """Обмежує ріст P-діагоналі під час коастингу (див. COAST_P_*_CAP).
+        Без капу P росте необмежено → sigma-точки UKF розповзаються →
+        квадратичний drag глушить gravity у sigma-mean → vy замерзає, трек
+        «висить» замість балістичної дуги. Кап тримає sigma тісними →
+        чиста парабола. Доповнює Gate A (обидва б'ють runaway P)."""
+        caps = np.array([
+            self.COAST_P_POS_CAP, self.COAST_P_VEL_CAP, self.COAST_P_ACC_CAP,
+            self.COAST_P_POS_CAP, self.COAST_P_VEL_CAP, self.COAST_P_ACC_CAP,
+            self.COAST_P_POS_CAP, self.COAST_P_VEL_CAP, self.COAST_P_ACC_CAP,
+        ])
+        for f in self.imm.filters:
+            self._cap_P_matrix(f.P, caps)
+        self._cap_P_matrix(self.imm.P, caps)
 
     def predict(self):
         # 9D state: y = x[3], vy = x[4] (було 6D: x[2], x[3]).
@@ -400,7 +456,8 @@ class Track:
         # _coast_skip = True означає, що висока mah_sq є очікуваною
         # (коастинг або resolved FP pending) — inflate не потрібен.
         do_cov_reset = (
-            z is not None
+            self.enable_cov_reset
+            and z is not None
             and not _coast_skip
             and self._last_mahalanobis_sq > self.COV_RESET_MAH_SQ_THRESHOLD
         )
@@ -426,6 +483,13 @@ class Track:
         # Фікс кадрів 611-650: гасимо залишковий accel, щоб коастинг
         # не розганявся через інтеграцію застарілого ax у швидкість.
         self._collapse_accel_to_ballistic()
+        # Gate C: кап росту P-діагоналі під час коастингу. Без нього P_vel
+        # розбухає (2.5→700 за ~57 кадрів), сигма-точки UKF розкидаються
+        # ±17-26 м/с, квадратичний drag (Jensen) тягне середню швидкість до
+        # нуля й перебиває гравітацію → vy «замерзає», м'яч зависає замість
+        # балістичної дуги. Кап тримає екстраполяцію фізичною за межами кадру.
+        if self.enable_coast_cov_cap:
+            self._cap_coast_covariance()
 
     def get_mahalanobis_distance(self, z, R_matrix):
         """
@@ -449,9 +513,13 @@ class Track:
 
 
 class IMMTracker:
-    def __init__(self, dt=0.02, max_age=80, min_hits=3, gating_threshold=11.34,
+    def __init__(self, dt=0.02, max_age=80, min_hits=3, gating_threshold=16.0,
                  bootstrap_max_gap_frames=5, bootstrap_max_dist=2.5,
-                 bootstrap_max_speed=35.0, enable_hysteresis=False):
+                 bootstrap_max_speed=35.0, enable_hysteresis=False,
+                 enable_cov_reset=False, enable_single_ball_nms=True,
+                 enable_physical_gate=True, max_assoc_residual=3.0,
+                 enable_coast_cov_cap=False,
+                 tentative_max_age=5, floor_kill_y=-0.3):
         """
         :param dt:                    крок часу (= 1 / FPS).
         :param max_age:               к-сть кадрів без оновлення до
@@ -477,8 +545,11 @@ class IMMTracker:
                                       100 доміновано 80-кою.
         :param min_hits:              к-сть кадрів для підтвердження
                                       треку (Tentative → Confirmed).
-        :param gating_threshold:      χ²-поріг гейтингу Махаланобіса
-                                      (df=3, p=0.99 → 11.34).
+        :param gating_threshold:      χ²-поріг гейтингу Махаланобіса.
+                                      χ²₃ p=0.99 = 11.34; default 16.0
+                                      пускає прикордонні детекції маневру
+                                      (mah 12-15) асоціюватись → оживляє
+                                      hit-режим без зростання проліферації.
         :param bootstrap_max_gap_frames: максимальний розрив (кадри) між
                                       пендінговою детекцією та поточною,
                                       щоб виконати bootstrap швидкості.
@@ -501,6 +572,37 @@ class IMMTracker:
                                       False (див. Track.__init__ — defer
                                       канібалізує cov-reset+hit). Прокидається
                                       з run_segment через --enable_hysteresis.
+        :param enable_cov_reset:      вмикає Step 2.A covariance reset у
+                                      кожному Track. Default False (Path B),
+                                      щоб оживити IMM hit-режим. run_segment
+                                      --enable_cov_reset повертає назад.
+        :param enable_single_ball_nms: Phase C. Домен — один м'яч, тож
+                                      одночасно має бути лише ОДИН Confirmed-
+                                      трек. Якщо їх >1 (фантом-дублі від
+                                      сміттєвих спавнів / дивергентного
+                                      коастингу), лишаємо найкращий, решту
+                                      понижуємо до Tentative. Default True;
+                                      run_segment --disable_single_ball_nms.
+        :param enable_physical_gate:  Gate A. Коваріаційно-незалежний стелаж
+                                      на евклідів residual ||z − прогноз||.
+                                      Mahalanobis-гейт залежить від P, а P
+                                      необмежено роздувається під час коастингу
+                                      (tsu=47 → P_pos ~80-130) → стрибок-FP на
+                                      8 м дає mah≈0.7 < гейт і ПРИЙМАЄТЬСЯ
+                                      (катастрофа fr763/807/86: трек телепортує
+                                      на сміттєву детекцію). Фіксований стелаж
+                                      на residual незалежний від коастингу й
+                                      ловить fr763 (resid 7.95) так само, як
+                                      короткий коастинг ловив fr867 (mah=33).
+                                      Default True; run_segment
+                                      --disable_physical_gate.
+        :param max_assoc_residual:    поріг Gate A (м). Розподіл прийнятих
+                                      апдейтів: p99=7.95, але реальний-маневр
+                                      максимум ≈2.2 м (fr283 resid 2.19,
+                                      mah 13; подача fr650 resid 2.08); чиста
+                                      прірва 2.2 → 5.95 м до найближчого
+                                      телепорта. 3.0 м: +0.8 м над легіт-
+                                      максимумом, −3 м під телепортом.
         """
         self.dt = dt
         self.max_age = max_age
@@ -511,6 +613,38 @@ class IMMTracker:
         self.bootstrap_max_dist = float(bootstrap_max_dist)
         self.bootstrap_max_speed = float(bootstrap_max_speed)
         self.enable_hysteresis = bool(enable_hysteresis)
+        self.enable_cov_reset = bool(enable_cov_reset)
+        self.enable_single_ball_nms = bool(enable_single_ball_nms)
+        # Gate A: коваріаційно-незалежний фізичний стелаж на residual.
+        self.enable_physical_gate = bool(enable_physical_gate)
+        self.max_assoc_residual = float(max_assoc_residual)
+        # Gate C: кап росту P-діагоналі під час коастингу (передається у Track).
+        self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
+        # Дефект 1: привид-треки. Tentative-трек, що не дійшов до min_hits,
+        # не повинен коастити як повноцінний — 1-2 шумові детекції інакше
+        # породжують ~80-кадрову фікцію (tid3/5/7: 0 confirmed, 99% coast,
+        # під підлогою). Вбиваємо Tentative після цього к-ва коаст-кадрів.
+        self.tentative_max_age = int(tentative_max_age)
+        # Дефект 2: підпідлоговий коаст. М'яч у польоті не може бути нижче
+        # підлоги; якщо трек НА КОАСТІ екстраполює y < floor_kill_y —
+        # екстраполяція стала фікцією (tid2 пірнав до −5.6 м), термінуємо.
+        # Невеликий від'ємний запас проти шуму біля підлоги (м'яч r≈0.1 м).
+        self.floor_kill_y = float(floor_kill_y)
+        # Gate B: merge-identity guard. Два Confirmed-треки успадковують
+        # спільний id лише якщо фізично примиренні (той самий м'яч,
+        # роздроблений маневром: ≤ цієї відстані). Далекий FP-трек, що
+        # дожив до Confirmed, НЕ донорить id реальному коастуючому треку
+        # (інакше merge-identity амплифікувала б телепорт). Маневр-фрагменти
+        # ≤~2 м, FP-телепорти ≥6 м → 4.0 м чисто розділяє.
+        self.SINGLE_BALL_MERGE_MAX_DIST = 4.0
+        # Phase C: коастинг ≤ цієї к-сті кадрів не коштує ідентичності
+        # (bucket'имо tsu). tol=1: реальний трек переживає ОДИН пропущений
+        # кадр (детекційний шум), але після 2+ кадрів коастингу поступається
+        # треку, що активно отримує детекції. Маленький tol важливий: під
+        # час маневру програшний трек коастить по старій траєкторії й
+        # ВІДХОДИТЬ від м'яча — чим раніше перемкнутись на детектований
+        # трек, тим менший просторовий стрибок на switch'і.
+        self.SINGLE_BALL_NMS_TSU_TOL = 1
 
         self.tracks = []
         self.next_id = 1
@@ -554,7 +688,17 @@ class IMMTracker:
         cost_matrix = np.full((len(self.tracks), len(detections_3d)), 1e5)
 
         for t, track in enumerate(self.tracks):
+            # Gate A: прогнозована позиція треку (h·x_prior) — точка відліку
+            # для коваріаційно-незалежного residual-стелажу.
+            z_pred = np.dot(track.h_matrix, track.imm.x_prior)
             for d, z in enumerate(detections_3d):
+                # Gate A: відкидаємо пару, якщо евклідів стрибок від прогнозу
+                # фізично неможливий за один крок асоціації — НЕЗАЛЕЖНО від
+                # того, наскільки роздулась P під час коастингу (саме це
+                # відкривало Mahalanobis-гейт для телепортів fr763/807/86).
+                if (self.enable_physical_gate
+                        and np.linalg.norm(z - z_pred) > self.max_assoc_residual):
+                    continue
                 dist_sq = track.get_mahalanobis_distance(z, self.R_matrix)
                 if dist_sq < self.gating_threshold:
                     cost_matrix[t, d] = dist_sq
@@ -636,7 +780,9 @@ class IMMTracker:
                 Track(self.next_id, z_now_arr, self.dt,
                       v_initial=best_v, initial_hits=2,
                       min_hits=self.min_hits,
-                      enable_hysteresis=self.enable_hysteresis)
+                      enable_hysteresis=self.enable_hysteresis,
+                      enable_cov_reset=self.enable_cov_reset,
+                      enable_coast_cov_cap=self.enable_coast_cov_cap)
             )
             self.next_id += 1
             # Видаляємо використану spawn-точку.
@@ -647,7 +793,9 @@ class IMMTracker:
             self.tracks.append(
                 Track(self.next_id, z_now_arr, self.dt,
                       min_hits=self.min_hits,
-                      enable_hysteresis=self.enable_hysteresis)
+                      enable_hysteresis=self.enable_hysteresis,
+                      enable_cov_reset=self.enable_cov_reset,
+                      enable_coast_cov_cap=self.enable_coast_cov_cap)
             )
             self.next_id += 1
             self._spawn_buffer.append(
@@ -668,11 +816,102 @@ class IMMTracker:
             if track.time_since_update > self.max_age:
                 track.state = 'Deleted'
 
+            # Дефект 1: привид-трек. Tentative (так і не підтвердився), а вже
+            # коастить понад tentative_max_age кадрів → шумовий спавн, який без
+            # цього малював би 80-кадрову фікцію. Підтверджені треки не зачеплені.
+            elif (track.state == 'Tentative'
+                  and track.time_since_update > self.tentative_max_age):
+                track.state = 'Deleted'
+
+            # Дефект 2: підпідлоговий коаст. Лише коли трек БЕЗ виміру (коаст):
+            # за наявності детекції y вимірюється й клампінг не потрібен.
+            elif (track.time_since_update > 0
+                  and track.imm.x[3] < self.floor_kill_y):
+                track.state = 'Deleted'
+
             # Трек залишається, якщо він не видалений
             if track.state != 'Deleted':
                 active_tracks.append(track)
 
         self.tracks = active_tracks
+
+        if self.enable_single_ball_nms:
+            self._suppress_duplicate_confirmed()
+
+    def _suppress_duplicate_confirmed(self):
+        """Phase C: single-ball NMS. Домен — один м'яч у грі, тож
+        одночасно має бути лише ОДИН Confirmed-трек. Якщо їх кілька
+        (фантом-дублі від сміттєвих спавнів або дивергентного коастингу),
+        лишаємо найкращий, решту ВИДАЛЯЄМО.
+
+        Видалення (а не пониження до Tentative) — навмисне: понижений
+        дубль продовжує красти детекції в Угорському алгоритмі (на маневрі
+        детекція перескакує між двома треками, що тримають той самий м'яч),
+        re-confirm'иться і знову конкурує — дубль жив ~200 кадрів і давав
+        9-14 стрибків ідентичності. Видалення зупиняє це: детекція стабільно
+        йде на переможця; якщо ж переможець справді розходиться з м'ячем,
+        нова детекція спавнить свіжий трек (ціна — трохи вища fragmentation,
+        але траєкторія помітно гладша: jerk↓, switches 9→3).
+
+        Найкращий = (min bucketed-tsu, max hits, min останній
+        Mahalanobis^2): активно оновлюваний > довгоживучий > добре
+        вписаний.
+
+        ВАЖЛИВО — bucketing tsu: короткий коастинг (tsu ≤ TSU_TOL)
+        прирівнюється до 0. Без цього один пропущений кадр на реальному
+        треку (tsu=1) віддавав би ідентичність дивергентному привиду з
+        tsu=0 — навіть якщо привид має 4 hits проти 245 у реального.
+        Це спричиняло мерехтіння ідентичності під час маневру (детекції
+        на 2-3 кадри перескакували на привид-трек). З bucket'ом реальний
+        трек (на порядок більше hits) тримає ідентичність крізь коротку
+        турбулентність; привид із ДОВГИМ коастингом (tsu > TSU_TOL) усе ж
+        поступається активному треку — коректний handoff."""
+        confirmed = [t for t in self.tracks if t.state == 'Confirmed']
+        if len(confirmed) < 2:
+            return
+
+        def _key(t):
+            eff_tsu = 0 if t.time_since_update <= self.SINGLE_BALL_NMS_TSU_TOL \
+                else t.time_since_update
+            return (eff_tsu, -t.hits, t._last_mahalanobis_sq)
+
+        confirmed.sort(key=_key)
+        winner = confirmed[0]
+
+        # Merge-identity (фікс fragmentation): домен — один м'яч, тож усі
+        # співіснуючі Confirmed-треки = той САМИЙ фізичний м'яч, лише
+        # роздроблений маневром (детекція вистрибує з гейту → народжується
+        # конкурент). Переможець успадковує МІНІМАЛЬНИЙ id групи →
+        # логічна ідентичність неперервна через шов, а не новий id щоразу.
+        # Розділені реальним розривом траєкторії (різні розіграші) НІКОЛИ
+        # не співіснують як Confirmed (gap десятки кадрів) → сюди не
+        # потрапляють → хибного злиття немає. Переносимо й МАКС hits, щоб
+        # злитий трек лишався "досвідченим" і стабільним переможцем у
+        # наступних NMS (tiebreaker -hits).
+        #
+        # Gate B (merge guard): id успадковуємо ЛИШЕ від фізично примиренних
+        # членів групи (≤ SINGLE_BALL_MERGE_MAX_DIST від переможця). Далекий
+        # FP-трек, що дожив до Confirmed (пройшов min_hits-верифікацію), усе
+        # одно НЕ донорить свій id — інакше merge-identity легалізувала б
+        # телепорт (амплифікація проблеми fr763). Він просто видаляється
+        # як дубль. Маневр-фрагменти лишаються близько (≤~2 м) → зливаються
+        # нормально; реальний м'яч, що далеко "перестрибнув", дає новий id —
+        # коректно, бо такий стрибок = фактично новий сегмент гри.
+        def _pos(t):
+            x = t.imm.x_post
+            return np.array([x[0], x[3], x[6]])
+
+        wp = _pos(winner)
+        reconcilable = [
+            t for t in confirmed
+            if np.linalg.norm(_pos(t) - wp) <= self.SINGLE_BALL_MERGE_MAX_DIST
+        ]
+        winner.track_id = min(t.track_id for t in reconcilable)
+        winner.hits = max(t.hits for t in reconcilable)
+
+        for loser in confirmed[1:]:
+            loser.state = 'Deleted'
+        self.tracks = [t for t in self.tracks if t.state != 'Deleted']
 
     def get_confirmed_tracks(self):
         """Повертає позиції лише тих треків, в яких ми впевнені"""

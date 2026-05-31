@@ -58,6 +58,10 @@ def parse_args() -> argparse.Namespace:
                    help="Шлях до вихідного PNG (9 панелей).")
     p.add_argument("--out_html", required=True, type=Path,
                    help="Шлях до вихідного HTML (Plotly 3D-сцена).")
+    p.add_argument("--out_png3d", type=Path, default=None,
+                   help="Опційно: чистий статичний 3D-вид (matplotlib). "
+                        "Висота — вертикальна вісь, правильні пропорції, "
+                        "бічний кут огляду; апекс підписано.")
     p.add_argument("--track_id", type=int, default=None,
                    help="Якщо вказано — будувати лише цей track_id. "
                         "Інакше беремо домінантний (макс. hits).")
@@ -279,6 +283,92 @@ def render_png(series: Dict[str, np.ndarray],
 
 
 # ----------------------------------------------------------------------
+def render_mpl3d(header: Dict[str, Any],
+                  frames: List[Dict[str, Any]],
+                  dom_track_id: int,
+                  all_tracks: bool,
+                  out_path: Path) -> None:
+    """
+    Чистий статичний 3D-вид (matplotlib mplot3d) — альтернатива plotly,
+    де перспектива й aspectmode="data" роблять траєкторію нечитабельною.
+
+    Маппінг на екран: ВИСОТА (фізична Y, індекс 3) -> вертикальна вісь
+    matplotlib; ширина X (індекс 0) та довжина Z (індекс 6) — горизонтальні.
+    Так парабола виглядає параболою, а підлога-майданчик — горизонтальною.
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (реєструє 3d)
+
+    fig = plt.figure(figsize=(13, 7))
+    ax = fig.add_subplot(111, projection="3d")
+
+    # Підлога-майданчик 9×18 на висоті 0 (X=ширина, Z=довжина).
+    ax.plot([0, 9, 9, 0, 0], [0, 0, 18, 18, 0], [0, 0, 0, 0, 0],
+            color="#555555", lw=1.5, label="Майданчик 9×18 м")
+    # Сітка 2.43 м поперек ширини на середині довжини (Z=9).
+    ax.plot([0, 9, 9, 0], [9, 9, 9, 9], [0, 0, 2.43, 2.43],
+            color="#999999", lw=1.2, ls="--", label="Сітка (2.43 м, Z=9)")
+
+    # Камера (якщо є в calibration).
+    calib = header.get("calibration")
+    if calib is not None and "camera_pos" in calib:
+        cp = calib["camera_pos"]
+        ax.scatter([cp[0]], [cp[2]], [cp[1]], marker="D", s=40,
+                   color="#34495e",
+                   label=f"Camera ({cp[0]:.1f}, {cp[1]:.1f}, {cp[2]:.1f})")
+
+    # Сирі детекції.
+    raw = np.array([fr["raw_3d"] for fr in frames
+                    if fr.get("raw_3d") is not None])
+    if raw.size:
+        ax.scatter(raw[:, 0], raw[:, 2], raw[:, 1], s=6, c="#c0392b",
+                   alpha=0.28, label=f"raw 3D (n={len(raw)})")
+
+    # Треки, кольоровані за часом.
+    track_ids = (list_all_track_ids(frames) if all_tracks
+                 else [dom_track_id])
+    cmaps = ["viridis", "plasma", "cividis", "winter", "cool"]
+    y_top = 11.0
+    for k, tid in enumerate(track_ids):
+        s = extract_track_series(frames, tid)
+        m = ~np.isnan(s["post_x"])
+        if m.sum() < 2:
+            continue
+        px, py, pz, pt = (s["post_x"][m], s["post_y"][m],
+                          s["post_z"][m], s["t"][m])
+        ax.plot(px, pz, py, color="#2980b9", lw=1.0, alpha=0.5)
+        sc = ax.scatter(px, pz, py, c=pt, cmap=cmaps[k % len(cmaps)],
+                        s=9, label=f"track #{tid} ({int(m.sum())} pts)")
+        y_top = max(y_top, float(py.max()) * 1.08)
+        if k == 0:
+            fig.colorbar(sc, ax=ax, shrink=0.5, pad=0.10,
+                         label=f"track #{tid} t (с)")
+            ai = int(py.argmax())
+            ax.text(px[ai], pz[ai], py[ai],
+                    f"  апекс {py[ai]:.1f} м", fontsize=9)
+
+    ax.set_xlabel("X — ширина (м)")
+    ax.set_ylabel("Z — довжина (м)")
+    ax.set_zlabel("Y — висота (м)")
+    ax.set_xlim(0, 9)
+    ax.set_ylim(-3, 18)
+    ax.set_zlim(0, y_top)
+    # Пропорції, наближені до фізичних, але висота не «розчавлена».
+    ax.set_box_aspect((9, 21, y_top))
+    ax.view_init(elev=14, azim=-74)
+
+    video = Path(header.get("video", "")).name
+    ax.set_title(f"3D-траєкторія — {video}  "
+                 f"track={'all' if all_tracks else dom_track_id}",
+                 fontsize=10)
+    ax.legend(loc="upper left", fontsize=8)
+    fig.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    print(f"[png3d] -> {out_path}")
+
+
+# ----------------------------------------------------------------------
 def render_html(header: Dict[str, Any],
                  frames: List[Dict[str, Any]],
                  dom_track_id: int,
@@ -363,6 +453,20 @@ def render_html(header: Dict[str, Any],
             name=f"track #{tid} ({int(mask.sum())} pts)",
         ))
 
+    # Динамічна верхня межа висоти: інакше високі подачі/лоби (апекс ~10-12 м)
+    # клипаються жорстким стелею. Беремо max висоти серед raw + усіх треків
+    # і даємо 8% запасу; не нижче 11 м, щоб корт мав адекватну вертикаль.
+    all_y: List[float] = []
+    for fr in frames:
+        rd = fr.get("raw_3d")
+        if rd is not None:
+            all_y.append(rd[1])
+        for tr in fr.get("tracks", []):
+            xp = tr.get("x_post")
+            if xp is not None:
+                all_y.append(xp[3])
+    y_top = max(11.0, (max(all_y) * 1.08 if all_y else 11.0))
+
     video = Path(header.get("video", "")).name
     fig.update_layout(
         title=(f"3D-траєкторія м'яча — {video}<br>"
@@ -371,9 +475,17 @@ def render_html(header: Dict[str, Any],
                 f"track={'all' if all_tracks else dom_track_id}</sub>"),
         scene=dict(
             xaxis=dict(title="X (м, поперек майданчика)", range=[-2, 11]),
-            yaxis=dict(title="Y (м, висота)", range=[0, 8]),
+            yaxis=dict(title="Y (м, висота)", range=[0, y_top]),
             zaxis=dict(title="Z (м, вздовж майданчика)", range=[-3, 20]),
             aspectmode="data",
+            # Висота (фізична Y) має дивитися ВГОРУ на екрані (up=y) — інакше
+            # plotly ставить вертикаллю Z (довжину корту 18 м), і підлога-
+            # майданчик виглядає як вертикальна "стіна". orthographic прибирає
+            # перспективний скіс, через який сцена здавалася "перекрученою".
+            # Камера дивиться вздовж корту від базової лінії, трохи згори.
+            camera=dict(up=dict(x=0, y=1, z=0),
+                        eye=dict(x=1.6, y=0.9, z=1.6),
+                        projection=dict(type="orthographic")),
         ),
         legend=dict(yanchor="top", y=0.98, x=0.01),
         margin=dict(l=0, r=0, t=80, b=0),
@@ -413,6 +525,9 @@ def main() -> int:
 
     render_png(series, header, dom_id, args.out_png)
     render_html(header, frames, dom_id, args.show_all_tracks, args.out_html)
+    if args.out_png3d is not None:
+        render_mpl3d(header, frames, dom_id, args.show_all_tracks,
+                     args.out_png3d)
 
     if summary is not None:
         print(f"[summary] {summary}")
