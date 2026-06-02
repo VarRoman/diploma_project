@@ -241,16 +241,20 @@ class IMMEstimator(object):
         for f in self.filters:
             f.x = self.x
 
-    def update(self, z):
+    def update(self, z, R=None):
         """
         Add a new measurement (z) to the Kalman filter. If z is None, nothing
         is changed.
         :param z: measurement
+        :param R: опційна коваріація вимірювання (3×3) для ЦЬОГО виміру.
+            Якщо None — кожен фільтр використовує власний self.R (фіксований).
+            Передаючи per-detection R (адаптивний σ_Z), ми робимо довіру до
+            глибини залежною від ширини bbox.
         """
 
         # run update on each filter, and save the likelihood
         for i, f in enumerate(self.filters):
-            f.update(z)
+            f.update(z, R=R)
             self.likelihood[i] = f.likelihood
 
         # update mode probabilities from total probability * likelihood

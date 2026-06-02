@@ -343,7 +343,9 @@ class Track:
         else:
             self.time_since_update += 1
 
-    def update(self, z):
+    def update(self, z, R=None):
+        # R — опційна per-detection коваріація вимірювання (адаптивний σ_Z).
+        # None → IMM-фільтри беруть власний фіксований self.R.
         current_mah_sq = self._last_mahalanobis_sq
 
         # ── Phase B: Delayed-accept hysteresis ────────────────────────────────
@@ -364,7 +366,7 @@ class Track:
                 # без predict() між ними порушує PD-властивість P → Cholesky fail.
                 # Inflate + поточний z достатньо для фіксації нової траєкторії.
                 self._inflate_covariance()
-                self.imm.update(z)
+                self.imm.update(z, R=R)
                 self.time_since_update = 0
                 self.hits += 1
                 self.hit_streak += 1
@@ -464,7 +466,7 @@ class Track:
         if do_cov_reset:
             self._inflate_covariance()
 
-        self.imm.update(z)
+        self.imm.update(z, R=R)
         self.time_since_update = 0
         self.hits += 1
         self.hit_streak += 1
@@ -519,7 +521,8 @@ class IMMTracker:
                  enable_cov_reset=False, enable_single_ball_nms=True,
                  enable_physical_gate=True, max_assoc_residual=3.0,
                  enable_coast_cov_cap=False,
-                 tentative_max_age=5, floor_kill_y=-0.3):
+                 tentative_max_age=5, floor_kill_y=-0.3,
+                 enable_adaptive_depth_R=False):
         """
         :param dt:                    крок часу (= 1 / FPS).
         :param max_age:               к-сть кадрів без оновлення до
@@ -630,6 +633,12 @@ class IMMTracker:
         # екстраполяція стала фікцією (tid2 пірнав до −5.6 м), термінуємо.
         # Невеликий від'ємний запас проти шуму біля підлоги (м'яч r≈0.1 м).
         self.floor_kill_y = float(floor_kill_y)
+        # Phase F: адаптивний σ_Z. Якщо True й у update() передано
+        # detection_covs — гейтинг і IMM-апдейт використовують per-detection
+        # 3×3 R (анізотропний, витягнутий уздовж променя; σ_Zc = f·D/w²·σ_w),
+        # а не фіксований self.R_matrix. Чесна довіра до глибини залежно від
+        # ширини bbox. Default False (A/B-сумісність).
+        self.enable_adaptive_depth_R = bool(enable_adaptive_depth_R)
         # Gate B: merge-identity guard. Два Confirmed-треки успадковують
         # спільний id лише якщо фізично примиренні (той самий м'яч,
         # роздроблений маневром: ≤ цієї відстані). Далекий FP-трек, що
@@ -660,12 +669,23 @@ class IMMTracker:
         self._spawn_buffer = []  # елементи: (np.array z, int frame_idx)
         self._frame_counter = 0
 
-    def update(self, detections_3d):
+    def update(self, detections_3d, detection_covs=None):
         """
         detections_3d: список масивів np.array([x, y, z]) для
         всіх знайдених об'єктів у кадрі
+        detection_covs: опційний паралельний список 3×3 коваріацій
+            вимірювання (по одній на детекцію). Вживається лише якщо
+            enable_adaptive_depth_R=True. None → фіксований self.R_matrix.
         """
         self._frame_counter += 1
+
+        def _R_for(d_idx):
+            """R для d-ї детекції: адаптивна, якщо ввімкнено й надано."""
+            if (self.enable_adaptive_depth_R
+                    and detection_covs is not None
+                    and detection_covs[d_idx] is not None):
+                return detection_covs[d_idx]
+            return self.R_matrix
 
         for track in self.tracks:
             track.predict()
@@ -699,7 +719,7 @@ class IMMTracker:
                 if (self.enable_physical_gate
                         and np.linalg.norm(z - z_pred) > self.max_assoc_residual):
                     continue
-                dist_sq = track.get_mahalanobis_distance(z, self.R_matrix)
+                dist_sq = track.get_mahalanobis_distance(z, _R_for(d))
                 if dist_sq < self.gating_threshold:
                     cost_matrix[t, d] = dist_sq
 
@@ -717,7 +737,7 @@ class IMMTracker:
                 self.tracks[r]._last_mahalanobis_sq = float(
                     cost_matrix[r, c]
                 )
-                self.tracks[r].update(detections_3d[c])
+                self.tracks[r].update(detections_3d[c], R=_R_for(c))
                 unmatched_tracks.remove(r)
                 unmatched_detections.remove(c)
 

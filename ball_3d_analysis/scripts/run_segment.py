@@ -54,6 +54,7 @@ sys.path.insert(0, str(_BALL_DIR))
 from get_court_position_methods import (  # noqa: E402
     calibrate_camera,
     get_3d_position,
+    get_3d_position_with_cov,
 )
 from IMM_UKF import (  # noqa: E402
     measurement_transform,
@@ -196,6 +197,23 @@ def parse_args() -> argparse.Namespace:
                         "коастах (60-80 кадрів без детекцій) малює переконливу "
                         "фікцію падіння з заниженого апекса → відкочено в "
                         "opt-in. Корінь заниженого апекса — драг, не P.")
+    p.add_argument("--enable_adaptive_depth_R", action="store_true",
+                   help="Phase F (ЕКСПЕРИМЕНТ, default OFF) — адаптивний σ_Z. "
+                        "Замість фіксованого R_z=0.5 рахуємо per-detection "
+                        "3×3 коваріацію вимірювання, витягнуту вздовж променя: "
+                        "σ_Zc = f·D/w²·σ_w. Дрібніший (далекий) bbox → більша "
+                        "невизначеність глибини → менша довіра фільтра. Чесне "
+                        "відображення монокулярної degeneracy глибини.")
+    p.add_argument("--sigma_w", type=float, default=1.0,
+                   help="σ ширини bbox (px) для адаптивного σ_Z. Емпірика на "
+                        "Japan_vs_Poland: MAD(w_box)≈0.38 px → ~0.56 px після "
+                        "1.4826·MAD; default 1.0 px — консервативний запас.")
+    p.add_argument("--focal_override", type=float, default=None,
+                   help="Перевизначити фокусну f_x=f_y у матриці K (px). "
+                        "Калібрування 4 копланарних кутів мінімізує репроєкцію "
+                        "при f≈5900 (проти 1300 у коді: 166→2.2 px), що "
+                        "розтягує стиснутий діапазон глибини. ЕКСПЕРИМЕНТ для "
+                        "A/B; default None (лишити K як є).")
     p.add_argument("--save_calibration", action="store_true",
                    help="Записати в header (перший рядок JSONL) усі "
                         "калібрувальні матриці для відтворюваності.")
@@ -374,10 +392,19 @@ def main() -> int:
     )
 
     # 2. Калібрування камери (одноразово на сегмент).
+    # Phase F: дозволяємо перевизначити фокусну (A/B f=1300 vs ≈5900).
+    K_eff = DEFAULT_K.copy()
+    if args.focal_override is not None:
+        K_eff[0, 0] = float(args.focal_override)
+        K_eff[1, 1] = float(args.focal_override)
+        sys.stderr.write(
+            f"[i] focal_override: f_x=f_y={args.focal_override:.1f} px "
+            f"(default 1300)\n"
+        )
     R, tvec, camera_pos = calibrate_camera(
         DEFAULT_PTS_REAL_3D,
         DEFAULT_PTS_VIDEO_2D,
-        DEFAULT_K,
+        K_eff,
         dist=np.zeros((4, 1)),
     )
 
@@ -409,6 +436,7 @@ def main() -> int:
         enable_physical_gate=not args.disable_physical_gate,
         max_assoc_residual=args.max_assoc_residual,
         enable_coast_cov_cap=args.enable_coast_cov_cap,
+        enable_adaptive_depth_R=args.enable_adaptive_depth_R,
     )
 
     # 5. Перемотування на початковий кадр.
@@ -442,6 +470,9 @@ def main() -> int:
             "enable_physical_gate": not args.disable_physical_gate,
             "max_assoc_residual": args.max_assoc_residual,
             "enable_coast_cov_cap": args.enable_coast_cov_cap,
+            "enable_adaptive_depth_R": args.enable_adaptive_depth_R,
+            "sigma_w": args.sigma_w,
+            "focal_override": args.focal_override,
         },
         "frame_size": [width, height],
     }
@@ -449,7 +480,7 @@ def main() -> int:
         header["calibration"] = {
             "pts_real_3d": DEFAULT_PTS_REAL_3D.tolist(),
             "pts_video_2d": DEFAULT_PTS_VIDEO_2D.tolist(),
-            "K": DEFAULT_K.tolist(),
+            "K": K_eff.tolist(),
             "R": R.tolist(),
             "tvec": tvec.tolist(),
             "camera_pos": camera_pos.ravel().tolist(),
@@ -503,13 +534,15 @@ def main() -> int:
         # 6.2 Зворотне проєктування у 3D.
         raw_3d: Optional[List[float]] = None
         z_filtered: Optional[np.ndarray] = None
+        z_cov: Optional[np.ndarray] = None  # per-detection R (адаптивний σ_Z)
         reject_reason: Optional[str] = None
         if raw_det["detected"]:
             n_detected += 1
             try:
-                pos = get_3d_position(
+                pos, pos_cov = get_3d_position_with_cov(
                     raw_det["u"], raw_det["v"], raw_det["w_box"],
-                    DEFAULT_K, R, camera_pos,
+                    K_eff, R, camera_pos,
+                    sigma_w=args.sigma_w,
                     return_none_on_clip=True,
                 )
                 if pos is None:
@@ -538,6 +571,7 @@ def main() -> int:
                         n_rejected_oob += 1
                     else:
                         z_filtered = pos.astype(np.float32)
+                        z_cov = pos_cov
                         n_used += 1
             except Exception as e:
                 reject_reason = f"get_3d_position_error: {e}"
@@ -561,7 +595,10 @@ def main() -> int:
         detections_3d: List[np.ndarray] = (
             [z_filtered] if z_filtered is not None else []
         )
-        tracker.update(detections_3d)
+        detection_covs: Optional[List[Optional[np.ndarray]]] = (
+            [z_cov] if z_filtered is not None else None
+        )
+        tracker.update(detections_3d, detection_covs=detection_covs)
 
         # 6.5 Знімаємо стани треків + innovation відносно поточної z.
         track_records: List[Dict[str, Any]] = []
