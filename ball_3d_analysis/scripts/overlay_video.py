@@ -164,6 +164,39 @@ def project_3d_to_pixel(
     return int(round(u)), int(round(v))
 
 
+def project_3d_to_pixel_ex(
+    P3d: np.ndarray,
+    R: np.ndarray,
+    tvec: np.ndarray,
+    K: np.ndarray,
+    frame_w: int,
+    frame_h: int,
+) -> Optional[Tuple[int, int, bool]]:
+    """
+    Як project_3d_to_pixel, але НЕ відкидає точки поза кадром.
+
+    Повертає (u_clamped, v_clamped, in_frame), де (u,v) ПРИТИСНУТІ до меж
+    кадру (для малювання маркера на краю під час коасту, коли м'яч вилетів
+    за межі кадру), а in_frame=True лише якщо справжня проєкція в межах
+    кадру. Повертає None ЛИШЕ якщо точка позаду камери (z_cam ≤ 0).
+
+    Мотивація: під час коасту (м'яч за кадром) стара функція повертала None
+    → зникали і шлейф, і координати у HUD. Тут лишаємо доступ до позиції,
+    щоб показати глибину фільтра навіть коли м'яч поза кадром.
+    """
+    P = np.asarray(P3d, dtype=np.float64).reshape(3, 1)
+    p_cam = R.dot(P) + tvec
+    z_cam = p_cam[2, 0]
+    if z_cam <= 1e-6:
+        return None
+    u = K[0, 0] * p_cam[0, 0] / z_cam + K[0, 2]
+    v = K[1, 1] * p_cam[1, 0] / z_cam + K[1, 2]
+    in_frame = (0 <= u < frame_w) and (0 <= v < frame_h)
+    uc = int(round(min(max(u, 0.0), frame_w - 1.0)))
+    vc = int(round(min(max(v, 0.0), frame_h - 1.0)))
+    return uc, vc, in_frame
+
+
 # ----------------------------------------------------------------------
 # Колір треку
 # ----------------------------------------------------------------------
@@ -278,11 +311,43 @@ def draw_track(img: np.ndarray, u: int, v: int,
         _put(label2, (u + 10, v + 8))
 
 
+def draw_offscreen_marker(img: np.ndarray, u: int, v: int,
+                          track_rec: Dict[str, Any], color: BGR) -> None:
+    """
+    Маркер для треку, чия проєкція ВИЛЕТІЛА за кадр (коаст / м'яч поза
+    межами). Малюється на ПРИТИСНУТІЙ до краю позиції (u,v): порожнисте
+    кільце (пунктир-стиль) замість заповненого кола + лейбл із 3D-позицією
+    та лічильником коасту, щоб користувач БАЧИВ глибину фільтра під час
+    екстраполяції. Текст зсуваємо всередину кадру, щоб не обрізався.
+    """
+    h, w = img.shape[:2]
+    cv2.circle(img, (u, v), 9, color, thickness=2, lineType=cv2.LINE_AA)
+    cv2.circle(img, (u, v), 2, color, thickness=-1, lineType=cv2.LINE_AA)
+
+    tid = int(track_rec.get("track_id", -1))
+    tsu = int(track_rec.get("time_since_update", 0) or 0)
+    x_post = track_rec.get("x_post")
+    lines = [f"T{tid} COAST({tsu})"]
+    if x_post and len(x_post) >= 9:
+        lines.append(f"filt ({x_post[0]:+.2f}, {x_post[3]:+.2f}, "
+                     f"{x_post[6]:+.2f})m")
+    # зсув тексту всередину кадру від краю
+    tx = min(max(u + 12, 8), w - 230)
+    ty = min(max(v - 6, 20), h - 30)
+    for i, text in enumerate(lines):
+        org = (tx, ty + i * 18)
+        cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (0, 0, 0), thickness=3, lineType=cv2.LINE_AA)
+        cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    color, thickness=1, lineType=cv2.LINE_AA)
+
+
 def draw_hud(img: np.ndarray,
              k: int, n_total: int, t_sec: float,
              n_tracks: int, n_confirmed: int, fps: float,
              yolo_3d: Optional[List[float]] = None,
-             filt_3d: Optional[List[float]] = None) -> None:
+             filt_3d: Optional[List[float]] = None,
+             coast: int = 0) -> None:
     """
     Напівпрозора плашка top-left. Базові 3 рядки + (за наявності) два
     рядки з поточною 3D-позицією у метрах: від YOLO (промінь крізь
@@ -317,10 +382,12 @@ def draw_hud(img: np.ndarray,
                     0.55, (120, 255, 120), 1, cv2.LINE_AA)
         y += 22
     if filt_3d is not None:
+        tag = f"  [COAST {coast}]" if coast > 0 else ""
         txt = (f"FILT 3D: ({filt_3d[0]:+.2f}, {filt_3d[1]:+.2f}, "
-               f"{filt_3d[2]:+.2f})m")
+               f"{filt_3d[2]:+.2f})m{tag}")
+        col = (80, 160, 255) if coast > 0 else (120, 200, 255)
         cv2.putText(img, txt, (pad, y), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55, (120, 200, 255), 1, cv2.LINE_AA)
+                    0.55, col, 1, cv2.LINE_AA)
         y += 22
 
 
@@ -450,25 +517,39 @@ def main() -> int:
         # Репрезентативна 3D-позиція фільтра для HUD: пріоритет
         # Confirmed-треку, інакше — перший намальований.
         hud_filt_3d: Optional[List[float]] = None
+        hud_coast: int = 0
         for tr in selected:
             x_post = tr.get("x_post")
             # 9D state: pos = indices 0, 3, 6.
             if not x_post or len(x_post) < 9:
                 continue
+            cand = [x_post[0], x_post[3], x_post[6]]
+            tsu = int(tr.get("time_since_update", 0) or 0)
+            # HUD-координати фільтра ЗАВЖДИ (навіть під час коасту, коли
+            # м'яч за кадром) — пріоритет Confirmed-треку.
+            if hud_filt_3d is None or tr.get("state") == "Confirmed":
+                hud_filt_3d = cand
+                hud_coast = tsu
             P3d = np.array(
                 [x_post[0], x_post[3], x_post[6]], dtype=np.float64
             )
-            uv = project_3d_to_pixel(P3d, R, tvec, K, W, H)
-            if uv is None:
-                continue
+            proj = project_3d_to_pixel_ex(P3d, R, tvec, K, W, H)
+            if proj is None:
+                continue          # позаду камери — намалювати ніяк
+            uc, vc, in_frame = proj
             tid = int(tr.get("track_id", -1))
             color = color_for_track_id(tid)
-            trails[tid].append(uv)
-            draw_trail(img, list(trails[tid]), color)
-            draw_track(img, uv[0], uv[1], tr, color)
-            cand = [x_post[0], x_post[3], x_post[6]]
-            if hud_filt_3d is None or tr.get("state") == "Confirmed":
-                hud_filt_3d = cand
+            if in_frame:
+                trails[tid].append((uc, vc))
+                draw_trail(img, list(trails[tid]), color)
+                draw_track(img, uc, vc, tr, color)
+            else:
+                # КОАСТ / м'яч за кадром: тримаємо шлейф (притиснутий до
+                # краю) + маркер-кільце на краю, щоб користувач бачив, що
+                # трек живий і куди прямує. Координати — у HUD.
+                trails[tid].append((uc, vc))
+                draw_trail(img, list(trails[tid]), color)
+                draw_offscreen_marker(img, uc, vc, tr, color)
 
         # YOLO 3D — промінь крізь поточну детекцію (frame-level raw_3d).
         raw_3d = rec.get("raw_3d")
@@ -490,6 +571,7 @@ def main() -> int:
             fps=fps,
             yolo_3d=hud_yolo_3d,
             filt_3d=hud_filt_3d,
+            coast=hud_coast,
         )
 
         writer.write(img)

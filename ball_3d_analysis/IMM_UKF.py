@@ -735,7 +735,8 @@ def get_dynamic_transition_matrix(y, vy,
                                   hit_residual_max_sq=11.34,
                                   bounce_height_max=0.55,
                                   frames_since_update=0,
-                                  bounce_max_coast=3):
+                                  bounce_max_coast=3,
+                                  m_hit_target=None):
     """
     Повертає марковську матрицю 3x3 переходів IMM для моделей
     [Ballistic, Hit, Bounce] на наступний крок передбачення.
@@ -850,7 +851,9 @@ def get_dynamic_transition_matrix(y, vy,
             (mahalanobis_sq - hit_residual_min_sq)
             / max(hit_residual_max_sq - hit_residual_min_sq, 1e-6),
         )
-        M_hit_target = np.array([0.45, 0.50, 0.05])
+        M_hit_target = (np.array([0.45, 0.50, 0.05])
+                        if m_hit_target is None
+                        else np.asarray(m_hit_target, dtype=float))
         M[0] = (1.0 - alpha) * M[0] + alpha * M_hit_target
 
     return M

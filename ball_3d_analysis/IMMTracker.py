@@ -184,7 +184,10 @@ class Track:
 
     def __init__(self, track_id, z_initial, dt, v_initial=None,
                  initial_hits=1, min_hits=3, enable_hysteresis=False,
-                 enable_cov_reset=False, enable_coast_cov_cap=False):
+                 enable_cov_reset=False, enable_coast_cov_cap=False,
+                 hit_residual_min_sq=8.0, hit_residual_max_sq=11.34,
+                 bounce_height_max=0.55, bounce_max_coast=3,
+                 m_hit_target=None):
         """
         :param enable_cov_reset: вмикає Step 2.A track-level covariance reset
                             (inflate P[v,a] при mah_sq>поріг). Default False
@@ -226,6 +229,15 @@ class Track:
         self.enable_hysteresis = bool(enable_hysteresis)
         self.enable_cov_reset = bool(enable_cov_reset)
         self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
+        # IMM-тригери (Phase F експеримент): прокидаються у
+        # get_dynamic_transition_matrix кожного predict(). Дефолти збігаються
+        # з сигнатурою функції — A/B-сумісність зі старими прогонами.
+        self.hit_residual_min_sq = float(hit_residual_min_sq)
+        self.hit_residual_max_sq = float(hit_residual_max_sq)
+        self.bounce_height_max = float(bounce_height_max)
+        self.bounce_max_coast = int(bounce_max_coast)
+        self.m_hit_target = (None if m_hit_target is None
+                             else np.asarray(m_hit_target, dtype=float))
         self.imm = create_imm_estimator(z_initial, dt, v_initial=v_initial)
 
         # Запам'ятовуємо ПЕРШУ детекцію — використовується для
@@ -329,6 +341,11 @@ class Track:
             self.imm.x[3], self.imm.x[4],
             mahalanobis_sq=self._last_mahalanobis_sq,
             frames_since_update=self.time_since_update,
+            hit_residual_min_sq=self.hit_residual_min_sq,
+            hit_residual_max_sq=self.hit_residual_max_sq,
+            bounce_height_max=self.bounce_height_max,
+            bounce_max_coast=self.bounce_max_coast,
+            m_hit_target=self.m_hit_target,
         )
         self.imm.predict()
         if self._pending is not None:
@@ -522,7 +539,10 @@ class IMMTracker:
                  enable_physical_gate=True, max_assoc_residual=3.0,
                  enable_coast_cov_cap=False,
                  tentative_max_age=5, floor_kill_y=-0.3,
-                 enable_adaptive_depth_R=False):
+                 enable_adaptive_depth_R=False,
+                 hit_residual_min_sq=8.0, hit_residual_max_sq=11.34,
+                 bounce_height_max=0.55, bounce_max_coast=3,
+                 m_hit_target=None):
         """
         :param dt:                    крок часу (= 1 / FPS).
         :param max_age:               к-сть кадрів без оновлення до
@@ -639,6 +659,16 @@ class IMMTracker:
         # а не фіксований self.R_matrix. Чесна довіра до глибини залежно від
         # ширини bbox. Default False (A/B-сумісність).
         self.enable_adaptive_depth_R = bool(enable_adaptive_depth_R)
+        # IMM-тригери (Phase F експеримент): прокидаються у кожен Track при
+        # створенні → get_dynamic_transition_matrix. Дозволяють тюнити
+        # активацію bounce/hit-режимів з CLI без правок коду. Дефолти =
+        # сигнатура get_dynamic_transition_matrix (A/B-сумісність).
+        self.hit_residual_min_sq = float(hit_residual_min_sq)
+        self.hit_residual_max_sq = float(hit_residual_max_sq)
+        self.bounce_height_max = float(bounce_height_max)
+        self.bounce_max_coast = int(bounce_max_coast)
+        self.m_hit_target = (None if m_hit_target is None
+                             else np.asarray(m_hit_target, dtype=float))
         # Gate B: merge-identity guard. Два Confirmed-треки успадковують
         # спільний id лише якщо фізично примиренні (той самий м'яч,
         # роздроблений маневром: ≤ цієї відстані). Далекий FP-трек, що
@@ -802,7 +832,12 @@ class IMMTracker:
                       min_hits=self.min_hits,
                       enable_hysteresis=self.enable_hysteresis,
                       enable_cov_reset=self.enable_cov_reset,
-                      enable_coast_cov_cap=self.enable_coast_cov_cap)
+                      enable_coast_cov_cap=self.enable_coast_cov_cap,
+                      hit_residual_min_sq=self.hit_residual_min_sq,
+                      hit_residual_max_sq=self.hit_residual_max_sq,
+                      bounce_height_max=self.bounce_height_max,
+                      bounce_max_coast=self.bounce_max_coast,
+                      m_hit_target=self.m_hit_target)
             )
             self.next_id += 1
             # Видаляємо використану spawn-точку.
@@ -815,7 +850,12 @@ class IMMTracker:
                       min_hits=self.min_hits,
                       enable_hysteresis=self.enable_hysteresis,
                       enable_cov_reset=self.enable_cov_reset,
-                      enable_coast_cov_cap=self.enable_coast_cov_cap)
+                      enable_coast_cov_cap=self.enable_coast_cov_cap,
+                      hit_residual_min_sq=self.hit_residual_min_sq,
+                      hit_residual_max_sq=self.hit_residual_max_sq,
+                      bounce_height_max=self.bounce_height_max,
+                      bounce_max_coast=self.bounce_max_coast,
+                      m_hit_target=self.m_hit_target)
             )
             self.next_id += 1
             self._spawn_buffer.append(
