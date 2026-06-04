@@ -162,6 +162,15 @@ def parse_args() -> argparse.Namespace:
                         "обвал bbox_w роздуває Z_c і кидає точку за зал. "
                         "Default 3.0 m (запас на ігрову зону за лініями). "
                         "Встановіть велике значення (напр. 99) щоб вимкнути.")
+    p.add_argument("--court_z_far_max", type=float, default=999.0,
+                   help="Far-Z стеля детекції (світовий Z, м). Окрема, "
+                        "ЖОРСТКІША за court_margin межа лише для ДАЛЬНЬОГО "
+                        "напрямку: відкидає прийняті детекції зі світовим Z > "
+                        "цього порогу. Back line корту = 18 м, легітимна гра "
+                        "(подача з-за лінії) ≤~20 м; м'яч фаната/подавальника "
+                        "на задньому фоні дає Z=22-27 м і через court_margin=10 "
+                        "(дозволяє до 28 м) паразитно годує трекер → "
+                        "перемикання ID. Рек. 21.0. Default 999 = вимкнено.")
     p.add_argument("--enable_cov_reset", action="store_true",
                    help="Увімкнути Step 2.A covariance reset. За замовч. "
                         "ВИМКНЕНО (Path B): cov-reset снапить маневр за 1 "
@@ -203,6 +212,54 @@ def parse_args() -> argparse.Namespace:
                         "коастах (60-80 кадрів без детекцій) малює переконливу "
                         "фікцію падіння з заниженого апекса → відкочено в "
                         "opt-in. Корінь заниженого апекса — драг, не P.")
+    p.add_argument("--spawn_suppress_max_coast", type=int, default=0,
+                   help="Gate D (default 0=OFF) — придушення спавну паразитного "
+                        "треку, поки реальний Confirmed-трек КОРОТКО коастить "
+                        "(0 < tsu ≤ N). Лікує корінь телепортів глибини при "
+                        "оклюзії/стисненні bbox: викидна детекція (w колапс → "
+                        "Z стрибок 6→16 м) більше не народжує конкурента, що "
+                        "перехоплював ідентичність через single-ball NMS. "
+                        "Коастуючий трек ре-захоплює м'яч, щойно повернеться "
+                        "валідна детекція. Рек. ~8 (типова оклюзія руками ≤8 "
+                        "кадрів @50 FPS). Понад N коасту → спавн дозволено "
+                        "(легітимний handoff після справжньої втрати).")
+    p.add_argument("--enable_depth_robust_gate", action="store_true",
+                   help="Gate A-depth (default OFF) — depth-robust Gate A. "
+                        "Розкладає residual на латераль (X,Y — проєкція u,v, "
+                        "яку YOLO дає коректно при оклюзії) та глибину (Z — "
+                        "f·D/w, що деградує при колапсі w). Гейтить ЛИШЕ "
+                        "латераль (hypot(dX,dY) ≤ max_assoc_residual), а велику "
+                        "інновацію глибини не відкидає, а сильно недовіряє "
+                        "(роздуває σ_Z² на (depth_hold_gain·innov)²). Реальний "
+                        "трек приймає детекцію → траєкторія приклеєна до м'яча "
+                        "(латераль з валідного u,v), а глибина тримається "
+                        "прогнозом (без телепорту 16 м). Альтернатива Gate D, "
+                        "що НЕ жертвує траєкторією заради глибини.")
+    p.add_argument("--depth_hold_gain", type=float, default=0.5,
+                   help="Коефіцієнт недовіри глибині для --enable_depth_robust_"
+                        "gate. σ_Z_eff² = σ_Z² + (depth_hold_gain·excess)². "
+                        "0.5: при excess=8 м σ_Z_eff≈4 м → детекція майже не "
+                        "зсуває глибину, домінує прогноз. Default 0.5.")
+    p.add_argument("--depth_innov_free", type=float, default=0.0,
+                   help="Мертва зона demt-distrust (м). excess = max(0, |innov| "
+                        "− depth_innov_free) — душимо лише надлишок понад поріг "
+                        "нормальної фізики. 0=чисте квадратичне демпфування. "
+                        "Рек. 3.0: пускає легітимну глибину (далека сторона, "
+                        "подача innov≈2-4 м), давить лише викиди оклюзії "
+                        "(innov 6-11 м). Default 0.0.")
+    p.add_argument("--enable_coast_z_fence", action="store_true",
+                   help="Coast Z-fence: під час коасту (немає вимірювання → "
+                        "жоден гейт не діє) клампити світову глибину Z прогнозу "
+                        "в [coast_z_min, coast_z_max] і гасити vz/az за фенсом. "
+                        "Без нього контамінована depth-швидкість (vz±19 м/с від "
+                        "обвалу w_box біля межі кадру) екстраполює Z у 33-42 м. "
+                        "Default OFF.")
+    p.add_argument("--coast_z_min", type=float, default=-3.0,
+                   help="Нижня межа coast Z-fence (м). Рек. -3 (подача з-за "
+                        "ближньої лінії). Default -3.0.")
+    p.add_argument("--coast_z_max", type=float, default=21.0,
+                   help="Верхня межа coast Z-fence (м). Рек. 21 (back line 18 м "
+                        "+ ~3 м на сервера). Default 21.0.")
     p.add_argument("--enable_adaptive_depth_R", action="store_true",
                    help="Phase F (ЕКСПЕРИМЕНТ, default OFF) — адаптивний σ_Z. "
                         "Замість фіксованого R_z=0.5 рахуємо per-detection "
@@ -705,6 +762,13 @@ def main() -> int:
         enable_physical_gate=not args.disable_physical_gate,
         max_assoc_residual=args.max_assoc_residual,
         enable_coast_cov_cap=args.enable_coast_cov_cap,
+        spawn_suppress_max_coast=args.spawn_suppress_max_coast,
+        enable_depth_robust_gate=args.enable_depth_robust_gate,
+        depth_hold_gain=args.depth_hold_gain,
+        depth_innov_free=args.depth_innov_free,
+        enable_coast_z_fence=args.enable_coast_z_fence,
+        coast_z_min=args.coast_z_min,
+        coast_z_max=args.coast_z_max,
         enable_adaptive_depth_R=args.enable_adaptive_depth_R,
         hit_residual_min_sq=args.hit_residual_min_sq,
         hit_residual_max_sq=args.hit_residual_max_sq,
@@ -738,12 +802,20 @@ def main() -> int:
             "floor_eps": args.floor_eps,
             "ceiling_max": args.ceiling_max,
             "court_margin": args.court_margin,
+            "court_z_far_max": args.court_z_far_max,
             "enable_hysteresis": args.enable_hysteresis,
             "enable_cov_reset": args.enable_cov_reset,
             "enable_single_ball_nms": not args.disable_single_ball_nms,
             "enable_physical_gate": not args.disable_physical_gate,
             "max_assoc_residual": args.max_assoc_residual,
             "enable_coast_cov_cap": args.enable_coast_cov_cap,
+            "spawn_suppress_max_coast": args.spawn_suppress_max_coast,
+            "enable_depth_robust_gate": args.enable_depth_robust_gate,
+            "depth_hold_gain": args.depth_hold_gain,
+            "depth_innov_free": args.depth_innov_free,
+            "enable_coast_z_fence": args.enable_coast_z_fence,
+            "coast_z_min": args.coast_z_min,
+            "coast_z_max": args.coast_z_max,
             "enable_adaptive_depth_R": args.enable_adaptive_depth_R,
             "sigma_w": args.sigma_w,
             "sigma_w_speed_gain": args.sigma_w_speed_gain,
@@ -883,6 +955,14 @@ def main() -> int:
                         elif pos[1] > args.ceiling_max:
                             reject_reason = "above_ceiling"
                             n_rejected_ceiling += 1
+                        elif pos[2] > args.court_z_far_max:
+                            # Far-Z стеля (окрема, жорсткіша за court_margin лише
+                            # для дальнього напрямку). Корт = 18 м, легітимна
+                            # гра ≤~20 м; м'яч фаната/подавальника на фоні дає
+                            # Z=22-27 м і паразитно годує трекер → перемикання
+                            # ID. Реджектимо до того, як він спавнить конкурента.
+                            reject_reason = "beyond_far_z"
+                            n_rejected_oob += 1
                         elif (pos[0] < -m or pos[0] > COURT_X_SIZE + m
                               or pos[2] < -m or pos[2] > COURT_Z_SIZE + m):
                             # Court-bounds гейт. Truncated-детекція на межі

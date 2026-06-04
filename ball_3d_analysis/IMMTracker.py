@@ -185,6 +185,7 @@ class Track:
     def __init__(self, track_id, z_initial, dt, v_initial=None,
                  initial_hits=1, min_hits=3, enable_hysteresis=False,
                  enable_cov_reset=False, enable_coast_cov_cap=False,
+                 enable_coast_z_fence=False, coast_z_min=-3.0, coast_z_max=21.0,
                  hit_residual_min_sq=8.0, hit_residual_max_sq=11.34,
                  bounce_height_max=0.55, bounce_max_coast=3,
                  m_hit_target=None):
@@ -229,6 +230,18 @@ class Track:
         self.enable_hysteresis = bool(enable_hysteresis)
         self.enable_cov_reset = bool(enable_cov_reset)
         self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
+        # Coast Z-fence (2026-06-04): під час коастингу немає вимірювання, тож
+        # жоден гейт не діє — predict() екстраполює світову глибину Z (індекс 6)
+        # за контамінованою depth-швидкістю vz (індекс 7). На даних: vz доростає
+        # до ±19 м/с (бо біля межі видимої області w_box обвалюється → Z=f·D/w
+        # роздувається), і коаст несе м'яч у Z=33-42 м — фізично неможливо на
+        # майданчику 18 м. Фенс клампить Z прогнозу у [coast_z_min, coast_z_max]
+        # і гасить vz/az, які штовхають за фенс. Якщо м'яч справді покинув корт —
+        # max_age його видалить; доки коастить у межах — глибина лишається
+        # фізичною. Діє ЛИШЕ під час коасту (mark_missed), не чіпає update-кадри.
+        self.enable_coast_z_fence = bool(enable_coast_z_fence)
+        self.coast_z_min = float(coast_z_min)
+        self.coast_z_max = float(coast_z_max)
         # IMM-тригери (Phase F експеримент): прокидаються у
         # get_dynamic_transition_matrix кожного predict(). Дефолти збігаються
         # з сигнатурою функції — A/B-сумісність зі старими прогонами.
@@ -334,6 +347,34 @@ class Track:
         for f in self.imm.filters:
             self._cap_P_matrix(f.P, caps)
         self._cap_P_matrix(self.imm.P, caps)
+
+    def _fence_coast_depth(self):
+        """Клампить світову глибину Z (індекс 6) під час коасту в межі
+        [coast_z_min, coast_z_max] і гасить depth-швидкість/прискорення
+        (vz=7, az=8), що штовхають за фенс. Застосовується до ВСІХ внутрішніх
+        UKF-фільтрів (їхні x та x_prior — основа sigma-точок наступного
+        predict) та до mixed-стану imm (репортиться в overlay). Без цього
+        контамінована vz екстраполює Z до 30-42 м (див. enable_coast_z_fence).
+        P не чіпаємо — за нього відповідає Gate C (coast_cov_cap)."""
+        zlo, zhi = self.coast_z_min, self.coast_z_max
+
+        def _clamp(x):
+            if x[6] > zhi:
+                x[6] = zhi
+                if x[7] > 0.0:
+                    x[7] = 0.0
+                    x[8] = 0.0
+            elif x[6] < zlo:
+                x[6] = zlo
+                if x[7] < 0.0:
+                    x[7] = 0.0
+                    x[8] = 0.0
+
+        for f in self.imm.filters:
+            _clamp(f.x)
+            _clamp(f.x_prior)
+        _clamp(self.imm.x)
+        _clamp(self.imm.x_prior)
 
     def predict(self):
         # 9D state: y = x[3], vy = x[4] (було 6D: x[2], x[3]).
@@ -509,6 +550,9 @@ class Track:
         # балістичної дуги. Кап тримає екстраполяцію фізичною за межами кадру.
         if self.enable_coast_cov_cap:
             self._cap_coast_covariance()
+        # Coast Z-fence: тримаємо екстрапольовану глибину фізичною (≤ майданчик).
+        if self.enable_coast_z_fence:
+            self._fence_coast_depth()
 
     def get_mahalanobis_distance(self, z, R_matrix):
         """
@@ -537,7 +581,10 @@ class IMMTracker:
                  bootstrap_max_speed=35.0, enable_hysteresis=False,
                  enable_cov_reset=False, enable_single_ball_nms=True,
                  enable_physical_gate=True, max_assoc_residual=3.0,
-                 enable_coast_cov_cap=False,
+                 enable_coast_cov_cap=False, spawn_suppress_max_coast=0,
+                 enable_depth_robust_gate=False, depth_hold_gain=0.5,
+                 depth_innov_free=0.0,
+                 enable_coast_z_fence=False, coast_z_min=-3.0, coast_z_max=21.0,
                  tentative_max_age=5, floor_kill_y=-0.3,
                  enable_adaptive_depth_R=False,
                  hit_residual_min_sq=8.0, hit_residual_max_sq=11.34,
@@ -643,6 +690,67 @@ class IMMTracker:
         self.max_assoc_residual = float(max_assoc_residual)
         # Gate C: кап росту P-діагоналі під час коастингу (передається у Track).
         self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
+        # Gate D: придушення спавну паразитного треку, поки реальний Confirmed-
+        # трек КОРОТКО коастить. Домен — один м'яч. Коли м'яч на 1-2 кадри
+        # зникає (руки гравця, злиплий/стиснутий bbox), його w колапсує →
+        # implied Z стрибає на 5-11 м → Gate A (правильно) робить реальний трек
+        # коастуючим. АЛЕ та сама стрибуча детекція раніше спавнила КОНКУРЕНТА,
+        # який за min_hits кадрів ставав Confirmed і через single-ball NMS
+        # (tsu_tol=1) ПЕРЕХОПЛЮВАВ ідентичність у 48-хітового реального треку —
+        # filtZ телепортувало 6→16 м, ще й паразитна vz з bootstrap. Цей гейт
+        # НЕ дає народитись конкуренту, поки існує живий Confirmed-трек із
+        # 0 < tsu ≤ spawn_suppress_max_coast: викид просто ігнорується, а
+        # коастуючий трек ре-захоплює м'яч, щойно повернеться валідна (Gate A)
+        # детекція. Після цього порогу коасту м'яч вважається СПРАВДІ
+        # переміщеним → спавн знову дозволено (легітимний handoff після довгої
+        # втрати). 0 = вимкнено (A/B-сумісність). Рек. ~8 (вкриває типову
+        # оклюзію руками ≤8 кадрів при 50 FPS).
+        self.spawn_suppress_max_coast = int(spawn_suppress_max_coast)
+        # Gate A-depth: depth-robust Gate A. Розкладаємо residual на ЛАТЕРАЛЬ
+        # (X=idx0 ширина, Y=idx1 висота — це проєкція пікселя u,v, яку YOLO дає
+        # коректно навіть при оклюзії) та ГЛИБИНУ (Z=idx2 — монокулярна
+        # f·D/w, що деградує, коли w колапсує під час оклюзії руками).
+        # При оклюзії residual латералі лишається <1 м, а residual глибини
+        # стрибає на 4-11 м. Звичайний Gate A (||z−прогноз||) відкидає таку
+        # детекцію цілком → реальний трек коастить, ВТРАЧАЮЧИ хороше u,v
+        # (траєкторія відстає від м'яча — скарга користувача на Gate D).
+        # depth-robust замість цього: (1) гейтить ЛИШЕ латераль жорстко
+        # (hypot(dX,dY) ≤ max_assoc_residual) — детекцію з правильним u,v
+        # ПРИЙМАЄМО; (2) велику інновацію глибини НЕ відкидаємо, а сильно
+        # НЕДОВІРЯЄМО: роздуваємо σ_Z² на (depth_hold_gain·depth_innov)² і в
+        # гейтингу (Mahalanobis), і на update-кроці. Глибину тоді тримає
+        # прогноз (без телепорту 16 м), а латераль X,Y оновлюється з валідної
+        # детекції (траєкторія приклеєна до м'яча, як у overlay_D027). Реальний
+        # трек з'їдає детекцію → фантом не спавниться → Gate D непотрібен.
+        # Default False (A/B-сумісність). depth_hold_gain≈0.5: при innov=8 м
+        # σ_Z_eff≈4 м → детекція майже не зсуває depth, прогноз домінує.
+        self.enable_depth_robust_gate = bool(enable_depth_robust_gate)
+        self.depth_hold_gain = float(depth_hold_gain)
+        # Мертва зона (Huber-style) для depth-distrust: демпфуємо лише
+        # НАДЛИШОК |innov| понад цей поріг нормальної фізики. excess =
+        # max(0, |innov| − depth_innov_free); σ_Z² += (gain·excess)².
+        # МОТИВАЦІЯ: чисте (gain·innov)² душило і легітимну глибину —
+        # на дальній стороні корту (rawZ природно шумить ±1.5-2 м →
+        # filtZ залипав занизько) та на подачі (innov −4.5 м → filtZ повз
+        # 12 кадрів замість швидкої збіжності). Мертва зона ~3 м пускає
+        # нормальну фізику без демпфування, а давить лише викиди оклюзії
+        # (innov 6-11 м). 0.0 = вимкнено (чисте квадратичне демпфування,
+        # A/B-сумісність). Рек. ~3.0 (= max_assoc_residual: «нормальний»
+        # фізичний крок).
+        self.depth_innov_free = float(depth_innov_free)
+        # Coast Z-fence (2026-06-04): під час коасту немає вимірювання → жоден
+        # гейт не діє, а predict() екстраполює світову Z за контамінованою vz
+        # (біля межі кадру w_box обвалюється → Z=f·D/w роздувається → vz±19 м/с).
+        # На даних коаст ніс м'яч у Z=33-42 м (майданчик лише 18 м). Фенс у
+        # mark_missed кожного треку клампить Z прогнозу в [coast_z_min,
+        # coast_z_max] і гасить vz/az за фенсом. Default False (A/B-сумісність).
+        # Рек. coast_z_max≈21 (= back line 18 м + ~3 м на сервера за лінією),
+        # coast_z_min≈-3 (подача з-за ближньої лінії). Доповнює far-Z стелю
+        # детекції (--court_z_far_max) у run_segment: одна давить джерело
+        # (контамінований вимір), друга — екстраполяцію.
+        self.enable_coast_z_fence = bool(enable_coast_z_fence)
+        self.coast_z_min = float(coast_z_min)
+        self.coast_z_max = float(coast_z_max)
         # Дефект 1: привид-треки. Tentative-трек, що не дійшов до min_hits,
         # не повинен коастити як повноцінний — 1-2 шумові детекції інакше
         # породжують ~80-кадрову фікцію (tid3/5/7: 0 confirmed, 99% coast,
@@ -717,6 +825,20 @@ class IMMTracker:
                 return detection_covs[d_idx]
             return self.R_matrix
 
+        def _depth_robust_R(track, z, R_base):
+            """Роздуваємо σ_Z² пропорційно квадрату інновації глибини, щоб
+            великий стрибок глибини майже не зсував фільтр (трек тримає
+            глибину прогнозом, латераль X,Y оновлює з валідної детекції).
+            z_pred беремо з x_prior (predict уже викликано для всіх треків)."""
+            z_pred = np.dot(track.h_matrix, track.imm.x_prior)
+            depth_innov = float(z[2] - z_pred[2])
+            # Мертва зона: душимо лише надлишок |innov| понад поріг
+            # нормальної фізики, щоб не калічити легітимну глибину.
+            excess = max(0.0, abs(depth_innov) - self.depth_innov_free)
+            R_eff = np.array(R_base, dtype=float, copy=True)
+            R_eff[2, 2] += (self.depth_hold_gain * excess) ** 2
+            return R_eff
+
         for track in self.tracks:
             track.predict()
 
@@ -742,14 +864,25 @@ class IMMTracker:
             # для коваріаційно-незалежного residual-стелажу.
             z_pred = np.dot(track.h_matrix, track.imm.x_prior)
             for d, z in enumerate(detections_3d):
+                R_d = _R_for(d)
                 # Gate A: відкидаємо пару, якщо евклідів стрибок від прогнозу
                 # фізично неможливий за один крок асоціації — НЕЗАЛЕЖНО від
                 # того, наскільки роздулась P під час коастингу (саме це
                 # відкривало Mahalanobis-гейт для телепортів fr763/807/86).
-                if (self.enable_physical_gate
-                        and np.linalg.norm(z - z_pred) > self.max_assoc_residual):
-                    continue
-                dist_sq = track.get_mahalanobis_distance(z, _R_for(d))
+                if self.enable_physical_gate:
+                    if self.enable_depth_robust_gate:
+                        # Gate A-depth: гейтимо ЛИШЕ латераль (X,Y). Велику
+                        # інновацію глибини не відкидаємо — нею керує
+                        # depth-distrust (роздутий σ_Z і в гейтингу, і на
+                        # update). Так детекція з валідним u,v приймається.
+                        lateral = float(np.hypot(z[0] - z_pred[0],
+                                                 z[1] - z_pred[1]))
+                        if lateral > self.max_assoc_residual:
+                            continue
+                        R_d = _depth_robust_R(track, z, R_d)
+                    elif np.linalg.norm(z - z_pred) > self.max_assoc_residual:
+                        continue
+                dist_sq = track.get_mahalanobis_distance(z, R_d)
                 if dist_sq < self.gating_threshold:
                     cost_matrix[t, d] = dist_sq
 
@@ -767,7 +900,13 @@ class IMMTracker:
                 self.tracks[r]._last_mahalanobis_sq = float(
                     cost_matrix[r, c]
                 )
-                self.tracks[r].update(detections_3d[c], R=_R_for(c))
+                R_c = _R_for(c)
+                if self.enable_depth_robust_gate:
+                    # Та сама роздута σ_Z, що й у гейтингу: депт тримається
+                    # прогнозом, латераль X,Y оновлюється з детекції.
+                    R_c = _depth_robust_R(self.tracks[r],
+                                          detections_3d[c], R_c)
+                self.tracks[r].update(detections_3d[c], R=R_c)
                 unmatched_tracks.remove(r)
                 unmatched_detections.remove(c)
 
@@ -777,8 +916,22 @@ class IMMTracker:
 
         # 6. Створення нових треків для нерозпізнаних детекцій
         #    (із bootstrap'ом швидкості, якщо знайдено попередника).
-        for d in unmatched_detections:
-            self._spawn_track_from_unmatched(detections_3d[d])
+        # Gate D: якщо реальний Confirmed-трек ЩОЙНО коастить коротко
+        # (0 < tsu ≤ spawn_suppress_max_coast), не народжуємо конкурента з
+        # викидних детекцій — нехай реальний трек ре-захопить м'яч. Викид НЕ
+        # потрапляє і в spawn-буфер → пізніший легітимний спавн стартує з
+        # нульовою швидкістю (без паразитного vz-bootstrap).
+        suppress_spawn = (
+            self.spawn_suppress_max_coast > 0
+            and any(
+                t.state == 'Confirmed'
+                and 0 < t.time_since_update <= self.spawn_suppress_max_coast
+                for t in self.tracks
+            )
+        )
+        if not suppress_spawn:
+            for d in unmatched_detections:
+                self._spawn_track_from_unmatched(detections_3d[d])
 
         # 7. Старіння spawn-буфера + видалення старих треків
         self._age_spawn_buffer()
@@ -833,6 +986,9 @@ class IMMTracker:
                       enable_hysteresis=self.enable_hysteresis,
                       enable_cov_reset=self.enable_cov_reset,
                       enable_coast_cov_cap=self.enable_coast_cov_cap,
+                      enable_coast_z_fence=self.enable_coast_z_fence,
+                      coast_z_min=self.coast_z_min,
+                      coast_z_max=self.coast_z_max,
                       hit_residual_min_sq=self.hit_residual_min_sq,
                       hit_residual_max_sq=self.hit_residual_max_sq,
                       bounce_height_max=self.bounce_height_max,
@@ -851,6 +1007,9 @@ class IMMTracker:
                       enable_hysteresis=self.enable_hysteresis,
                       enable_cov_reset=self.enable_cov_reset,
                       enable_coast_cov_cap=self.enable_coast_cov_cap,
+                      enable_coast_z_fence=self.enable_coast_z_fence,
+                      coast_z_min=self.coast_z_min,
+                      coast_z_max=self.coast_z_max,
                       hit_residual_min_sq=self.hit_residual_min_sq,
                       hit_residual_max_sq=self.hit_residual_max_sq,
                       bounce_height_max=self.bounce_height_max,
