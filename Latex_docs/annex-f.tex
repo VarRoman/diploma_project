@@ -1,23 +1,63 @@
-\documentclass[%
-  ukrainian, utf8, columnvii, simple,
-  hpadding=10mm, vpadding=10mm, reduceheight=2mm,
-  floatsection,
-]{eskdtext}
+\documentclass[ukrainian, utf8, columnxxvi]{eskdgraph}
 
-% \usepackage[subpreambles=true]{standalone}
-\usepackage{eskddstu}
-\input{common/preamble}
-\usepackage{graphicx}
+\input{common/preamble-graph}
 
 \stampDocName{\FStranscript}
 \stampDocId{\FSid}{\FS}
 
 \begin{document}
 
-\pagenumbering{gobble}
-\maketitle
-\pagenumbering{arabic}
+\begin{ESKDdrawing}
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  node distance=0.95cm,
+  io/.style={trapezium, trapezium left angle=70, trapezium right angle=110,
+             draw=black, fill=blue!10, text width=6cm, minimum height=0.9cm,
+             align=center, inner sep=2pt},
+  proc/.style={rectangle, draw=black, fill=orange!12, text width=7cm,
+             minimum height=0.95cm, align=center, inner sep=3pt},
+  dec/.style={diamond, aspect=2.4, draw=black, fill=green!12, text width=4.2cm,
+             align=center, inner sep=1pt},
+  store/.style={rectangle, draw=black, dashed, fill=gray!6, text width=3.6cm,
+             align=center, inner sep=3pt, font=\footnotesize},
+  ar/.style={thick, ->, >=stealth},
+  lbl/.style={font=\footnotesize, fill=white, inner sep=1.5pt},
+]
 
-% \include{class-diagram/cd}
+  \node[io]    (frame) {Відеокадр $I_t$};
+  \node[proc, below=of frame] (det) {Детектування м'яча (YOLO26)};
+  \node[proc, below=of det]   (geo) {Зворотне проєктування\\(PnP + кидання променя)};
+  \node[proc, below=of geo]   (pred){Прогноз стану IMM/UKF\\(сигма-точки, $F$, $Q$)};
+  \node[dec,  below=1.1cm of pred] (gate){Гейти асоціації:\\far-Z, Gate~A, coast-fence};
+  \node[proc, below=1.1cm of gate] (upd) {Корекція IMM/UKF\\(оновлення, змішування $\mu$)};
+  \node[proc, below=of upd]   (state){Стан треку 9D $\hat{x}_t$\\+ життєвий цикл};
+  \node[io,   below=of state] (out)  {Виходи: 3D-траєкторії, статистика, оверлей};
+
+  % --- сховища (ресурси) ---
+  \node[store, right=1.4cm of det] (w)  {Вагова модель YOLO26};
+  \node[store, right=1.4cm of geo] (cal){Параметри калібрування камери};
+
+  % --- основний потік ---
+  \draw[ar] (frame) -- (det);
+  \draw[ar] (det) -- node[lbl,right]{bbox $(u,v,w,h)$, conf} (geo);
+  \draw[ar] (geo) -- node[lbl,right]{вимір $z{=}(X,Y,Z)$, $R_{3\times3}$} (pred);
+  \draw[ar] (pred) -- node[lbl,right]{апріорі $\hat{x}^-_t,\,P^-_t$} (gate);
+  \draw[ar] (gate) -- node[lbl,right]{прийнято} (upd);
+  \draw[ar] (upd) -- (state);
+  \draw[ar] (state) -- (out);
+
+  % --- зворотний зв'язок прогнозу ---
+  \draw[ar] (state.west) -- ++(-3.3,0) |- node[lbl,left,pos=0.25]{$t{+}1$} (pred.west);
+
+  % --- гілка коастингу (відхилено) ---
+  \draw[ar] (gate.east) -| node[lbl,above,pos=0.25]{відхилено $\Rightarrow$ коастинг} ($(state.east)+(1.7,0)$) -- (state.east);
+
+  % --- ресурси -> процеси ---
+  \draw[ar] (w)   -- (det.east);
+  \draw[ar] (cal) -- (geo.east);
+
+\end{tikzpicture}
+\end{ESKDdrawing}
 
 \end{document}

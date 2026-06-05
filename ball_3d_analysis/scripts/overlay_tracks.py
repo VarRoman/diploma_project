@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Накласти результат IMMTracker (JSONL з run_segment.py) на відео.
+Overlay the IMMTracker result (JSONL from run_segment.py) onto the video.
 
-Малює на кожному кадрі:
-  • сиру YOLO-детекцію (жовте коло + bbox; червоне, якщо детекцію відкинуто
-    гейтом — з підписом причини);
-  • 3D-позиції треків, спроєктовані НАЗАД у кадр (Confirmed — зелене,
-    Tentative — сіре), з track_id, метровими X/Y/Z і слідом останніх позицій;
-  • стовпчики ймовірностей режимів IMM (ballistic / hit / bounce) для
-    домінантного треку — щоб ОКОМ бачити, чи прокидаються фізичні режими;
-  • каркас майданчика й сітки, спроєктований тими ж K,R,t — візуальна
-    перевірка, що калібрування й глибина адекватні.
+Draws on every frame:
+  • the raw YOLO detection (yellow circle + bbox; red if the detection was
+    rejected by a gate — with the reason labelled);
+  • the 3D track positions back-projected into the frame (Confirmed — green,
+    Tentative — grey), with track_id, metric X/Y/Z and a trail of recent
+    positions;
+  • IMM mode probability bars (ballistic / hit / bounce) for the dominant
+    track — so you can see by eye whether the physical modes wake up;
+  • the court and net frame projected with the same K,R,t — a visual check
+    that calibration and depth are sane.
 
-Калібрування береться з header (--save_calibration) АБО перераховується
-self-contained тими ж 4 копланарними кутами, що й у run_segment.
+Calibration is taken from the header (--save_calibration) or recomputed
+self-contained from the same four coplanar corners as run_segment.
 
-Запуск:
+Run:
   ~/miniconda3/envs/Volleyball_diploma/bin/python3 scripts/overlay_tracks.py \
       --video ../data/videos/Japan_vs_Poland_ultrashort.mp4 \
       --jsonl /tmp/ab_default_check.jsonl \
@@ -29,7 +30,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 
-# self-contained калібрування (ті самі точки, що у run_segment / модулі)
+# self-contained calibration (same points as run_segment / the module)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from get_court_position_methods import (  # noqa: E402
     calibrate_camera, pts_real_3d, pts_video_2d,
@@ -45,15 +46,15 @@ def load_jsonl(path):
 
 
 def build_calibration(header):
-    """Повертає (K, R, camera_pos) — з header.calibration якщо є, інакше
-    перерахунок тими ж 4 копланарними кутами."""
+    """Return (K, R, camera_pos) — from header.calibration if present,
+    otherwise recomputed from the same four coplanar corners."""
     cal = header.get("calibration")
     if cal and "K" in cal and "R" in cal and "camera_pos" in cal:
         K = np.array(cal["K"], np.float64)
         R = np.array(cal["R"], np.float64)
         cam = np.array(cal["camera_pos"], np.float64).reshape(3)
         return K, R, cam
-    # перерахунок: фокусна з tracker.focal_override або K-дефолт 5805 (бродкаст)
+    # recompute: focal from tracker.focal_override or the 5805 default (broadcast)
     tk = header.get("tracker", {})
     f = tk.get("focal_override") or 5805.0
     iw, ih = header.get("frame_size", [1920, 1080])
@@ -65,11 +66,11 @@ def build_calibration(header):
 
 
 def project(pts_world, K, R, cam):
-    """(N,3) світові → (N,2) пікселі, узгоджено з оберненою моделлю
-    get_3d_position: P = cam + Z_c·(Rᵀ·d_cam) ⇒ q = R·(P−cam),
-    u = cx + fx·q₀/q₂. (calibrate_camera робить Y-flip для хіральності,
-    тож cv2.projectPoints з tvec тут НЕ підходить.) Повертає (px(N,2),
-    z_cam(N,)) — z_cam>0 = точка перед камерою."""
+    """(N,3) world -> (N,2) pixels, consistent with the inverse model in
+    get_3d_position: P = cam + Z_c*(R^T*d_cam) => q = R*(P-cam),
+    u = cx + fx*q0/q2. (calibrate_camera applies a Y-flip for chirality, so
+    cv2.projectPoints with tvec does not fit here.) Returns (px(N,2),
+    z_cam(N,)) — z_cam>0 means the point is in front of the camera."""
     pw = np.asarray(pts_world, np.float64).reshape(-1, 3)
     fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
     q = (R @ (pw - cam.reshape(1, 3)).T).T          # (N,3)
@@ -101,7 +102,7 @@ def draw_court(img, K, R, cam):
 
 
 def draw_mode_bars(img, mu, org):
-    """Стовпчики IMM: ballistic(сірий) / hit(червоний) / bounce(синій)."""
+    """IMM bars: ballistic(grey) / hit(red) / bounce(blue)."""
     labels = ["bal", "hit", "bnc"]
     cols = [(180, 180, 180), (0, 0, 255), (255, 120, 0)]
     x0, y0 = org
@@ -116,10 +117,10 @@ def draw_mode_bars(img, mu, org):
 
 
 def draw_coord_panel(img, tid, Xw, zcam, dz, fresh):
-    """Помітне табло координат домінантного треку: світові X/Y/Z (м),
-    дистанція до камери Z_cam (м) і її покадрова зміна ΔZ_cam (м) —
-    індикатор джиттера глибини. ΔZ_cam забарвлюється: зелений <0.3 м,
-    жовтий 0.3-1.0, червоний >1.0."""
+    """Prominent coordinate panel for the dominant track: world X/Y/Z (m),
+    distance to camera Z_cam (m) and its per-frame change dZ_cam (m) — a depth
+    jitter indicator. dZ_cam is colour-coded: green <0.3 m, yellow 0.3-1.0,
+    red >1.0."""
     x0, y0 = 20, 70
     w, h = 330, 168
     ov = img.copy()
@@ -131,14 +132,14 @@ def draw_coord_panel(img, tid, Xw, zcam, dz, fresh):
     tagc = (0, 220, 0) if fresh else (0, 165, 255)
     cv2.putText(img, f"track #{tid}  [{tag}]", (x0 + 12, y0 + 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, tagc, 2, cv2.LINE_AA)
-    # світові координати (X=ширина 0-9, Y=висота, Z=довжина 0-18)
+    # world coordinates (X=width 0-9, Y=height, Z=length 0-18)
     cv2.putText(img, f"X={Xw[0]:6.2f} m  (width 0-9)", (x0 + 12, y0 + 54),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
     cv2.putText(img, f"Y={Xw[1]:6.2f} m  (height)", (x0 + 12, y0 + 80),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
     cv2.putText(img, f"Z={Xw[2]:6.2f} m  (length 0-18)", (x0 + 12, y0 + 106),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
-    # дистанція до камери + джиттер
+    # distance to camera + jitter
     adz = abs(dz)
     dzc = (0, 220, 0) if adz < 0.3 else (0, 215, 215) if adz < 1.0 \
         else (0, 60, 255)
@@ -162,10 +163,10 @@ def main():
     header, recs = load_jsonl(args.jsonl)
     by_frame = {r["frame_0based"]: r for r in recs if r.get("type") == "frame"}
     K, R, cam = build_calibration(header)
-    # Phase F (padding sweep): підпис ефективного діаметра D_eff і похідного
-    # «порожнього відступу» padding=(D_eff−0.21)/2 на сторону (см). Z_c∝D_eff,
-    # тож це число прямо масштабує всю глибину — показуємо в HUD, щоб
-    # порівнювати відео різних padding-значень ОКОМ.
+    # Phase F (padding sweep): label the effective diameter D_eff and the
+    # derived "empty padding" = (D_eff-0.21)/2 per side (cm). Z_c is proportional
+    # to D_eff, so this number scales the whole depth directly — we show it in
+    # the HUD to compare videos of different padding values by eye.
     d_eff = float(header.get("tracker", {}).get("ball_diameter", 0.21))
     pad_cm = (d_eff - 0.21) / 2.0 * 100.0
     fr_range = header.get("frame_range", [0, len(recs)])
@@ -182,7 +183,7 @@ def main():
     vw = cv2.VideoWriter(str(args.out), fourcc, fps, (w, h))
 
     trails = {}      # track_id -> list of (px,py)
-    prev_zcam = {}   # track_id -> попередня дистанція до камери (для ΔZ_cam)
+    prev_zcam = {}   # track_id -> previous distance to camera (for dZ_cam)
     n = 0
     f_idx = f_start
     while True:
@@ -190,11 +191,11 @@ def main():
         if not ok:
             break
         rec = by_frame.get(f_idx)
-        # каркас майданчика
+        # court frame
         draw_court(frame, K, R, cam)
 
         if rec is not None:
-            # сира детекція
+            # raw detection
             rd = rec.get("raw_detection") or {}
             if rd.get("detected"):
                 u, v = int(rd["u"]), int(rd["v"])
@@ -211,7 +212,7 @@ def main():
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1,
                                 cv2.LINE_AA)
 
-            # треки
+            # tracks
             tracks = rec.get("tracks", [])
             dom = None
             dom_info = None  # (Xw, z_cam, fresh)
@@ -239,7 +240,7 @@ def main():
                     dom_info = (Xw, float(zc[0]),
                                 t["time_since_update"] == 0)
 
-            # Панель координат + IMM-режими домінантного Confirmed-треку
+            # Coordinate panel + IMM modes of the dominant Confirmed track
             if dom is not None and dom_info is not None:
                 Xw, zcam, fresh = dom_info
                 tid = dom["track_id"]

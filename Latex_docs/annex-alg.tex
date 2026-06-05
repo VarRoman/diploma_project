@@ -1,0 +1,69 @@
+\documentclass[ukrainian, utf8, columnxxvi]{eskdgraph}
+
+\input{common/preamble-graph}
+
+\stampDocName{\PStranscript}
+\stampDocId{\PSid}{\PS}
+
+\begin{document}
+
+\begin{ESKDdrawing}
+\centering
+\begin{tikzpicture}[
+  font=\footnotesize,
+  se/.style={rectangle, rounded corners=8pt, draw=black, fill=red!18,
+             text width=3.2cm, minimum height=0.55cm, align=center, inner sep=1pt},
+  pr/.style={rectangle, draw=black, fill=orange!12,
+             text width=5.4cm, minimum height=0.55cm, align=center, inner sep=1.5pt},
+  de/.style={diamond, aspect=3, draw=black, fill=green!12,
+             text width=3.6cm, align=center, inner sep=0pt, font=\scriptsize},
+  co/.style={rectangle, draw=black, fill=blue!10,
+             text width=3.7cm, minimum height=0.95cm, align=center, inner sep=3pt},
+  ar/.style={thick, ->, >=stealth},
+  yl/.style={font=\scriptsize, fill=white, inner sep=1pt},
+]
+
+  \node[se] (start) {Початок};
+  \node[pr,  below=0.28cm of start] (read)   {Зчитати наступний кадр $I_t$};
+  \node[pr,  below=0.28cm of read]  (det)    {Детектування м'яча (YOLO26)};
+  \node[de,  below=0.3cm of det]    (dhas)   {Є детекція?};
+  \node[pr,  below=0.35cm of dhas]  (back)   {Зворотне проєктування $z{=}(X,Y,Z)$, анізотропна $R$};
+  \node[pr,  below=0.28cm of back]  (pred)   {Прогноз IMM/UKF (сигма-точки)};
+  \node[de,  below=0.3cm of pred]   (dfar)   {Глибина $Z\le 21$\,м?};
+  \node[de,  below=0.4cm of dfar]   (dgate)  {Gate~A: латераль $\mathrm{hypot}(dX,dY)\le 3$\,м?};
+  \node[pr,  below=0.4cm of dgate]  (corr)   {Інфляція $\sigma_Z^2$ + корекція IMM/UKF, змішування режимів $\mu$};
+  \node[pr,  below=0.28cm of corr]  (upd)    {Оновлення стану 9D + життєвий цикл треку};
+  \node[de,  below=0.3cm of upd]    (dmore)  {Є ще кадри?};
+  \node[se,  below=0.35cm of dmore] (end)    {Кінець};
+
+  % коастинг — права колонка
+  \node[co] (coast) at (8.2,-5.2) {Коастинг (лише прогноз), обмеження $Z\in[-3,21]$\,м (coast-fence)};
+
+  % --- головний потік ---
+  \draw[ar] (start) -- (read);
+  \draw[ar] (read) -- (det);
+  \draw[ar] (det) -- (dhas);
+  \draw[ar] (dhas) -- node[yl,right]{так} (back);
+  \draw[ar] (back) -- (pred);
+  \draw[ar] (pred) -- (dfar);
+  \draw[ar] (dfar) -- node[yl,right]{так} (dgate);
+  \draw[ar] (dgate) -- node[yl,right]{так} (corr);
+  \draw[ar] (corr) -- (upd);
+  \draw[ar] (upd) -- (dmore);
+
+  % --- цикл по кадрах ---
+  \draw[ar] (dmore.west) -- node[yl,above,pos=0.35]{так} ++(-3.2,0) |- (read.west);
+  \draw[ar] (dmore.south) -- node[yl,right]{ні} (end);
+
+  % --- відхилення -> коастинг ---
+  \draw[ar] (dhas.east)  -| node[yl,above,pos=0.25]{ні} (coast.north);
+  \draw[ar] (dfar.east)  -- node[yl,above]{ні} (coast.west);
+  \draw[ar] (dgate.east) -| node[yl,above,pos=0.25]{ні} ($(coast.south)+(0,0)$);
+
+  % --- коастинг -> оновлення ---
+  \draw[ar] (coast.south) |- (upd.east);
+
+\end{tikzpicture}
+\end{ESKDdrawing}
+
+\end{document}

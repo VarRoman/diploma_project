@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 """
-compute_statistics.py — просторово-часова статистика гри з траєкторії м'яча.
+compute_statistics.py — spatio-temporal game statistics from the ball trajectory.
 
-Вхід: JSONL-діагностика прогону `run_segment.py` (header + по рядку на кадр).
-Вихід: читабельний звіт у stdout + (опційно) JSON-зведення (--out_json).
+Input:  JSONL diagnostics of a `run_segment.py` run (header + one line per frame).
+Output: a readable report on stdout + (optionally) a JSON summary (--out_json).
 
-ГЕОМЕТРІЯ (узгоджено з калібруванням run_segment / overlay_tracks):
-    Світові координати: X = ширина майданчика [0, 9] м,
-                        Y = висота над підлогою (м),
-                        Z = довжина майданчика [0, 18] м.
-    Сітка ділить майданчик по довжині навпіл → площина Z = 9 м, висота 2.43 м.
-    «Ближня» сторона = Z < 9, «дальня» = Z > 9.
+Geometry (consistent with the run_segment / overlay_tracks calibration):
+    World coordinates: X = court width  [0, 9] m,
+                       Y = height above the floor (m),
+                       Z = court length [0, 18] m.
+    The net splits the court lengthwise -> plane Z = 9 m, height 2.43 m.
+    "Near" side = Z < 9, "far" side = Z > 9.
 
-ЩО РАХУЄМО:
-    • покриття (частка кадрів із підтвердженим м'ячем);
-    • час перебування м'яча на кожній стороні (через знак Z − 9);
-    • переходи через сітку (зміни знаку Z − 9 уздовж одного треку);
-    • швидкість м'яча (зі стану фільтра [vx,vy,vz]): середня / медіана / макс.;
-    • висоту (середня / макс., кадри над сіткою);
-    • сумарний шлях м'яча;
-    • сегменти-розіграші (неперервні відрізки одного треку).
+What we compute:
+    • coverage (fraction of frames with a confirmed ball);
+    • time the ball spends on each side (via the sign of Z - 9);
+    • net crossings (sign changes of Z - 9 along a single track);
+    • ball speed (from the filter state [vx,vy,vz]): mean / median / max;
+    • height (mean / max, frames above the net);
+    • total ball path length;
+    • rally segments (continuous stretches of a single track).
 
-ФІЛЬТР СМІТТЯ (важливо для бродкасту з перемиканням камер): калібрування
-валідне лише для основної ігрової камери. На повторах/крупних планах гомографія
-хибна → 3D «вилітає» за майданчик. За замовчуванням рахуємо лише фізично
-правдоподібні кадри (всередині майданчика + санітарний кап швидкості).
+Garbage filter (important for broadcast with camera cuts): calibration is only
+valid for the main game camera. On replays / close-ups the homography is wrong
+-> 3D "flies" off the court. By default we count only physically plausible
+frames (inside the court + a sanity speed cap).
 """
 from __future__ import annotations
 
@@ -36,15 +36,15 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-# Геометрія майданчика (м) — та сама, що в overlay_tracks / run_segment.
-COURT_X = 9.0          # ширина
-COURT_Z = 18.0         # довжина
-NET_Z = COURT_Z / 2.0  # площина сітки по довжині
-NET_H = 2.43           # висота сітки (чоловічий волейбол)
+# Court geometry (m) — same as in overlay_tracks / run_segment.
+COURT_X = 9.0          # width
+COURT_Z = 18.0         # length
+NET_Z = COURT_Z / 2.0  # net plane along the length
+NET_H = 2.43           # net height (men's volleyball)
 
 
 def load_frames(path: Path) -> tuple[dict, List[dict]]:
-    """Зчитати header + усі кадрові рядки JSONL."""
+    """Read the header + all per-frame JSONL lines."""
     header: Dict[str, Any] = {}
     frames: List[dict] = []
     with open(path, encoding="utf-8") as f:
@@ -61,8 +61,8 @@ def load_frames(path: Path) -> tuple[dict, List[dict]]:
 
 
 def pick_primary(frame: dict) -> Optional[dict]:
-    """Домінантний м'яч кадру: підтверджений трек із найбільшою к-стю влучень.
-    Якщо підтверджених нема — None (Tentative не рахуємо у статистику)."""
+    """Dominant ball of the frame: the confirmed track with the most hits.
+    If none is confirmed — None (Tentative tracks are not counted)."""
     tracks = frame.get("tracks") or []
     confirmed = [t for t in tracks if t.get("state") == "Confirmed"]
     if not confirmed:
@@ -72,8 +72,8 @@ def pick_primary(frame: dict) -> Optional[dict]:
 
 def in_court(x: float, y: float, z: float, ceiling: float,
              margin: float) -> bool:
-    """Чи лежить 3D-точка у фізично правдоподібному обсязі (з невеликим
-    запасом margin по периметру)."""
+    """Whether the 3D point lies in a physically plausible volume (with a small
+    margin around the perimeter)."""
     return (-margin <= x <= COURT_X + margin
             and -0.5 <= y <= ceiling
             and -margin <= z <= COURT_Z + margin)
@@ -86,8 +86,8 @@ def compute(path: Path, speed_cap: float, court_margin: float,
     fps = float(header.get("fps") or (1.0 / dt))
     n_total = len(frames)
 
-    # Per-кадрові вибірки домінантного треку (лише валідні 3D + tsu==0,
-    # тобто реальна асоціація з детекцією — найчистіше для статистики).
+    # Per-frame samples of the dominant track (only valid 3D + tsu==0, i.e. a
+    # real association with a detection — cleanest for statistics).
     samples: List[dict] = []   # {fr, tid, X,Y,Z, speed, side}
     track_ids = set()
     confirmed_frames = 0
@@ -105,10 +105,10 @@ def compute(path: Path, speed_cap: float, court_margin: float,
         if not in_court(X, Y, Z, ceiling, court_margin):
             continue
         if t.get("time_since_update", 0) != 0:
-            continue  # лише реально оновлені кадри (без коаст-екстраполяції)
+            continue  # only genuinely updated frames (no coast extrapolation)
         speed = float(np.sqrt(vx * vx + vy * vy + vz * vz))
         if speed > speed_cap:
-            continue  # санітарний відсів сміттєвих стрибків швидкості
+            continue  # sanity rejection of garbage speed spikes
         track_ids.add(t.get("track_id"))
         samples.append(dict(fr=fr.get("frame"), tid=t.get("track_id"),
                             X=X, Y=Y, Z=Z, speed=speed))
@@ -134,7 +134,7 @@ def compute(path: Path, speed_cap: float, court_margin: float,
     Y = np.array([s["Y"] for s in samples])
     spd = np.array([s["speed"] for s in samples])
 
-    # --- Час за сторонами (сітка @ Z=9) ---
+    # --- Time per side (net @ Z=9) ---
     near = int(np.sum(Z < NET_Z))
     far = int(np.sum(Z >= NET_Z))
     res["time_near_s"] = near * dt
@@ -142,7 +142,7 @@ def compute(path: Path, speed_cap: float, court_margin: float,
     res["time_near_pct"] = near / n_valid
     res["time_far_pct"] = far / n_valid
 
-    # --- Швидкість (м/с) ---
+    # --- Speed (m/s) ---
     res["speed_mean_ms"] = float(np.mean(spd))
     res["speed_median_ms"] = float(np.median(spd))
     res["speed_max_ms"] = float(np.max(spd))
@@ -151,25 +151,25 @@ def compute(path: Path, speed_cap: float, court_margin: float,
     res["speed_max_kmh"] = res["speed_max_ms"] * 3.6
     res["speed_max_frame"] = int(samples[int(np.argmax(spd))]["fr"])
 
-    # --- Висота ---
+    # --- Height ---
     res["height_mean_m"] = float(np.mean(Y))
     res["height_max_m"] = float(np.max(Y))
     res["height_max_frame"] = int(samples[int(np.argmax(Y))]["fr"])
     res["frames_above_net"] = int(np.sum(Y > NET_H))
 
-    # --- Переходи через сітку + сегменти-розіграші ---
-    # Йдемо по вибірках, групуючи у неперервні «розіграші»: розрив треку
-    # (зміна track_id або стрибок кадру) завершує сегмент. Перехід сітки
-    # рахуємо лише ВСЕРЕДИНІ одного сегмента (фізична безперервність).
+    # --- Net crossings + rally segments ---
+    # Walk the samples, grouping them into continuous "rallies": a track break
+    # (track_id change or frame jump) ends a segment. A net crossing is counted
+    # only within a single segment (physical continuity).
     net_crossings = 0
     rallies: List[dict] = []
     seg_start = 0
     for i in range(1, n_valid + 1):
         broken = (i == n_valid
                   or samples[i]["tid"] != samples[i - 1]["tid"]
-                  or (samples[i]["fr"] - samples[i - 1]["fr"]) > fps)  # >1 c gap
+                  or (samples[i]["fr"] - samples[i - 1]["fr"]) > fps)  # >1 s gap
         if not broken:
-            # перехід сітки всередині сегмента
+            # net crossing inside the segment
             if (Z[i] - NET_Z) * (Z[i - 1] - NET_Z) < 0:
                 net_crossings += 1
             continue
@@ -189,7 +189,7 @@ def compute(path: Path, speed_cap: float, court_margin: float,
     res["rallies"] = rallies
     res["rally_count"] = len(rallies)
 
-    # --- Сумарний шлях м'яча (лише в межах одного треку, послідовні кадри) ---
+    # --- Total ball path (within a single track, consecutive frames only) ---
     dist = 0.0
     for i in range(1, n_valid):
         if (samples[i]["tid"] == samples[i - 1]["tid"]

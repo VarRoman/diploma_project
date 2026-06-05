@@ -3,14 +3,23 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# video
+*.mp4
+*.avi
+
 # C extensions
 *.so
 
 # my documents
 /documentation
+*.jsonl
+*.json
 
 # Latex documents
 *.aux
+*.acr
+*.alg
+*.acn
 *.bbl
 *.bcf
 *.blg
@@ -212,3 +221,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+/ball_3d_analysis/overlays/

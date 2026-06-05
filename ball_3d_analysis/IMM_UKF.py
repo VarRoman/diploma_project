@@ -121,8 +121,8 @@ class UnscentedKalmanFilter(object):
         # mean and covariance of prediction passed through unscented transform
         z_mean, self.S = UT(self.sigmas_h, self.Wm, self.Wc,
                             R, self.z_mean_fn, self.residual_z)
-        # Регуляризуємо S перед інверсією/правдоподібністю: гарантована
-        # позитивна визначеність навіть при тимчасово виродженій коваріації.
+        # Regularise S before inversion / likelihood: guarantees positive
+        # definiteness even when the covariance is momentarily degenerate.
         S_stable = self.S + np.eye(self.S.shape[0]) * 1e-6
         try:
             self.SI = np.linalg.inv(S_stable)
@@ -134,9 +134,7 @@ class UnscentedKalmanFilter(object):
 
         self.K = np.dot(Pxz, self.SI) # Kalman gain
         self.y = self.residual_z(z, z_mean)
-        # multivariate_normal.pdf без allow_singular=True може кидати ValueError
-        # ("the input matrix must be positive semidefinite") — а не лише
-        # LinAlgError, тому ловимо обидва.
+
         try:
             self.likelihood = multivariate_normal.pdf(
                 self.y,
@@ -146,7 +144,7 @@ class UnscentedKalmanFilter(object):
             )
         except (np.linalg.LinAlgError, ValueError):
             self.likelihood = 1e-300
-        # IMM-рівень очікує строго додатну правдоподібність:
+            
         if not np.isfinite(self.likelihood) or self.likelihood <= 0.0:
             self.likelihood = 1e-300
 
@@ -246,10 +244,9 @@ class IMMEstimator(object):
         Add a new measurement (z) to the Kalman filter. If z is None, nothing
         is changed.
         :param z: measurement
-        :param R: опційна коваріація вимірювання (3×3) для ЦЬОГО виміру.
-            Якщо None — кожен фільтр використовує власний self.R (фіксований).
-            Передаючи per-detection R (адаптивний σ_Z), ми робимо довіру до
-            глибини залежною від ширини bbox.
+        :param R: optional per-detection measurement covariance (3x3). If None,
+            each filter uses its own fixed self.R. Passing a per-detection R
+            (adaptive sigma_Z) makes depth trust depend on the bbox width.
         """
 
         # run update on each filter, and save the likelihood
@@ -608,20 +605,12 @@ def logpdf(x, mean=None, cov=1, allow_singular=True):
 
 def fx_ballistic(x, dt):
     """
-    9D балістична модель (CV-CA-IMM): state = [x, vx, ax, y, vy, ay, z, vz, az].
+    9D ballistic model (CV-CA-IMM): state = [x, vx, ax, y, vy, ay, z, vz, az].
 
-    Гравітація — driving term (-g по Y), не входить у state.
-    Квадратичний drag — також driving term: a_drag = -k·|v|·v.
-    State-компоненти ax, ay, az — "залишкове" прискорення: ≈0 у чистій
-    балістиці, ≠0 під час удару/блоку (накопичується через великий Q[a]
-    у hit-моделі). Інтерпретованість: |a_state| ↔ сила маневру.
-
-    Дискретизація constant-acceleration:
-        p_new = p + v·dt + 0.5·a_total·dt^2
-        v_new = v + a_total·dt
-        a_new = a (детермінованно — змінюється лише через Q[a] шум).
-
-    Step 2.B (Phase 3): переведено з 6D CV+driving-gravity на 9D CA.
+    Constant-acceleration discretisation:
+        p_new = p + v*dt + 0.5*a_total*dt^2
+        v_new = v + a_total*dt
+        a_new = a (deterministic — it only changes through the Q[a] noise).
     """
     vx = np.clip(x[1], -40.0, 40.0)
     vy = np.clip(x[4], -40.0, 40.0)
@@ -654,27 +643,20 @@ def fx_ballistic(x, dt):
 
 def fx_hit(x, dt):
     """
-    9D модель удару: структурно ідентична fx_ballistic (CA з гравітацією
-    + drag). Відмінність — у Q-матриці (create_imm_estimator): hit-mode
-    має значно більшу Q[a], що дозволяє accel "прокинутись" від ~0 до
-    імпульсних значень за один-два кадри. Так удар/блок "запам'ятовується"
-    як ненульовий accel у state, замість випадкового дрейфу швидкості
-    через великий Q[v] у старій 6D-версії.
-
-    Це класична CV-CA-IMM конфігурація з двома рівнями шуму прискорення
-    (low для балістики, high для маневру). IMMEstimator розрізняє моделі
-    через likelihood, що залежить від P (а P залежить від Q).
+    9D hit model: structurally identical to fx_ballistic (CA with gravity and
+    drag). The difference is in the Q matrix (create_imm_estimator): the hit
+    mode has a much larger Q[a], which lets the acceleration "wake up" from ~0
+    to impulsive values within a frame or two. A hit/block is thus remembered
+    as a non-zero acceleration in the state, instead of the random velocity
+    drift caused by a large Q[v] in the old 6D version.
     """
     return fx_ballistic(x, dt)
 
 
 def fx_bounce(x, dt):
     """
-    9D модель відскоку від підлоги: інверсія vy із epsilon=0.75,
-    тертя vx/vz із friction=0.85. Accel скидається у 0 — відскок це
-    детермінований імпульс, що "очищує" попередню історію accel
-    (контактна сила реалізується через зміну швидкості, не через
-    залишкове прискорення).
+    9D floor-bounce model: vy is inverted with epsilon=0.75, vx/vz are damped
+    with friction=0.85.
     """
     epsilon = 0.75
     friction = 0.85
@@ -691,7 +673,7 @@ def fx_bounce(x, dt):
     x_next[4] = vy_new
     x_next[7] = vz_new
 
-    # Скидаємо залишкове прискорення — відскок це "новий старт".
+    # Reset residual acceleration — a bounce is a "fresh start".
     x_next[2] = 0.0
     x_next[5] = 0.0
     x_next[8] = 0.0
@@ -701,25 +683,20 @@ def fx_bounce(x, dt):
 
 def hx(x):
     """
-    Вимірювальна функція 9D → 3D: видобуваємо лише позиції (індекси 0, 3, 6).
-    Швидкості (1, 4, 7) та прискорення (2, 5, 8) — не вимірюються, лише
-    оцінюються через UKF/IMM.
+    Measurement function 9D -> 3D: extract positions only (indices 0, 3, 6).
+    Velocities (1, 4, 7) and accelerations (2, 5, 8) are not measured, only
+    estimated by the UKF/IMM.
     """
     return np.array([x[0], x[3], x[6]])
 
 def measurement_transform(prediction_data, K, R_matrix, camera_pos,
                           ball_diameter=0.21):
     """
-    Перетворює запис детекції (px, py, ширина рамки) у тривимірний вимір
-    [X, Y, Z] світових координат у системі майданчика з конвенцією:
-        X — поперек майданчика (по лицевій лінії),
-        Y — вертикальна вісь (вгору, перпендикулярно підлозі),
-        Z — вздовж довгої сторони (по бічній лінії).
-    Підлога відповідає Y = 0; стеля — Y > 0.
-
-    Раніше тут була інверсія `raw_y = -raw_y` — рудимент конвенції
-    Z=вертикаль, що робив висоту від'ємною і ламав гравітаційну
-    компоненту fx_ballistic. Прибрано після уніфікації осей.
+    Turn a detection record (px, py, bbox width) into a 3D world measurement
+    [X, Y, Z] in court coordinates, with the convention:
+        X — across the court (along the end line),
+        Y — vertical axis (up, perpendicular to the floor),
+        Z — along the long side (along the side line).
     """
     u_cam, v_cam, w_cam = (prediction_data['x_pos'], prediction_data['y_pos'],
                            prediction_data['w_box'])
@@ -738,113 +715,44 @@ def get_dynamic_transition_matrix(y, vy,
                                   bounce_max_coast=3,
                                   m_hit_target=None):
     """
-    Повертає марковську матрицю 3x3 переходів IMM для моделей
-    [Ballistic, Hit, Bounce] на наступний крок передбачення.
+    Return the 3x3 IMM Markov transition matrix for the models
+    [Ballistic, Hit, Bounce] for the next prediction step.
 
-    Базова матриця "залипає" на Ballistic (M[0,0]=0.95): без зовнішніх
-    тригерів м'яч продовжує летіти по балістичній траєкторії.
+    The base matrix sticks to Ballistic (M[0,0]=0.95): without external
+    triggers the ball keeps following a ballistic trajectory.
 
-    Тригери:
+    Triggers:
 
-    1) **Bounce** — пасивний геометричний тригер. Якщо м'яч близько до
-       підлоги (y < bounce_height_max) і рухається вниз (vy < 0),
-       наступний крок різко зміщає Markov-матрицю до Bounce-режиму.
-       Поріг підняли 0.3 → 0.55 (2026-05-30): аудит епізоду відбиття
-       (кадри 275-290) показав, що ТРЕКОВАНА висота на дні відбиття
-       опускається лише до ~0.35 м (raw min ~0.61 м) — стара межа 0.3
-       НІКОЛИ не спрацьовувала, тож mu_bounce залишався ~0.01 і реверс
-       vy "витягувала" балістична модель за 3 кадри (пізно + рвано).
-       0.55 ловить дно відбиття з запасом; умова vy<0 гарантує, що після
-       відскоку (vy>0) тригер вимикається й не реверсить швидкість
-       повторно.
+    1) Bounce — a passive geometric trigger.
 
-    2) **Mid-air hit** — тригер за residual'ом. Активується тільки коли
-       квадрат Mahalanobis'а останньої прийнятої детекції потрапляє у
-       "rare-event" зону. χ²₃-розподіл має 99-перцентиль ≈ 11.34
-       (= наш гейт). Зона активації [8.0, 11.34] відповідає верхнім
-       ~2% residual'ів — фактично сигнал, що траєкторія раптово
-       змінилась (пас/атака/блок), хоч детекція й не настільки
-       аберантна, щоб не пройти гейт.
+    2) Mid-air hit — a residual-based trigger.
 
-       Раніше пробували min_sq=4.0, але це 25-й хвіст χ²₃ — тригер
-       вистрелював у 25% кадрів нормального трекінгу, що подвоїло
-       mode_switch_overall_rate_hz (3.46 → 7.18 Hz на тестовому
-       сегменті). Підняття порогу до 8.0 повертає mode-switching до
-       робочих значень, але зберігає реакцію на справжні удари.
+       Parameters:
 
-       Параметри:
+       - hit_residual_min_sq=8.0:   ~95th percentile of chi^2_3;
+       - hit_residual_max_sq=11.34: upper bound = gating threshold.
 
-       - hit_residual_min_sq=8.0:  ~95-й перцентиль χ²₃;
-       - hit_residual_max_sq=11.34: верхня межа = поріг гейтингу.
+       Outside [min, max] the interpolation is clamped (0 below, 1 above).
 
-       Поза діапазоном [min, max] інтерполяція клампується (0 нижче,
-       1 вище).
-
-    :param y:   вертикальна координата м'яча у світовій СК (м).
-    :param vy:  вертикальна швидкість (м/с).
-    :param mahalanobis_sq: квадрат Mahalanobis'а останньої прийнятої
-        детекції відносно IMM-прогнозу (0 для треків без оновлень).
-    :param hit_residual_min_sq, hit_residual_max_sq: діапазон активації
-        hit-тригера (квадрати, що відповідають χ²₃-розподілу).
+    :param y:   ball vertical coordinate in world frame (m).
+    :param vy:  vertical velocity (m/s).
+    :param mahalanobis_sq: squared Mahalanobis distance of the last accepted
+        detection against the IMM prediction (0 for tracks without updates).
+    :param hit_residual_min_sq, hit_residual_max_sq: activation range of the
+        hit trigger (squared values matching the chi^2_3 distribution).
     """
     M = np.array([[0.95, 0.04, 0.01],
                   [0.60, 0.40, 0.00],
                   [0.90, 0.00, 0.10]])
 
-    # Лок 0: сліпий коаст -> розв'язка мод (одинична M). Коли трек довше за
-    # bounce_max_coast кадрів іде без вимірювань (м'яч поза кадром / у
-    # глибокій оклюзії), ймовірності мод НЕ інформовані даними. М'яч у
-    # вільному польоті поза кадром — за визначенням чисто балістичний.
-    # Базова матриця має постійний витік Ballistic->Bounce (M[0,2]=0.01);
-    # bounce-фільтр сидить на інвертованій vy (~-7 м/с), і IMM
-    # interaction-step щокадру вливає ~1% цієї швидкості назад у балістику
-    # (~-0.17 м/с/кадр поверх фізики). На довгому підйомі (32 кадри) це
-    # з'їдає ~5 м/с і занижує апекс ~10.0 -> ~8.35 м (діагноз tid4,
-    # 2026-05-30).
-    #
-    # Одинична M розриває цей витік: стовпець 0 = [1,0,0] означає, що
-    # ЗМІШАНИЙ стартовий стан балістичного фільтра = його ВЛАСНИЙ стан без
-    # домішки bounce/hit (omega[i,0]=0 для i!=0). Тобто балістичний фільтр
-    # під час коасту еволюціонує чисто фізично. Чому не [[1,0,0]]*3 (як
-    # планувалось): там стовпці 1,2 нульові -> cbar[1]=cbar[2]=0 -> filterpy
-    # ділить 0/0 у мікшуванні -> NaN у коваріації -> Cholesky падає. У
-    # одиничній cbar[j]=mu[j]>0, NaN не виникає. Реакузиція детекції
-    # (tsu->0) автоматично повертає повну базову M.
-    # Емпірично (tid4, 2026-05-31): одинична матриця дає апекс 8.33->9.50 м.
-    # Пробували активне злиття bounce->ballistic (M[2,0]=0.5) щоб прибрати
-    # залишкову 1% bounce-домішку з ВИХОДУ — вийшло ГІРШЕ (9.42), бо
-    # перехідний re-bleed bounce-стану в балістичний ФІЛЬТР накопичується й
-    # несеться до апекса. Кумулятивний витік у фільтр домінує над статичною
-    # домішкою у виході, тож нульовий витік (eye) — оптимум. Залишок
-    # 9.50 vs ~10.0 (фізика) = 1% bounce у виході; прибрати без витоку в
-    # фільтр Марковське мікшування не дозволяє (маса тече через стовпець 0).
     if frames_since_update > bounce_max_coast:
         return np.eye(3)
 
-    # Тригер 1: bounce при контакті з підлогою. Має найвищий пріоритет —
-    # після відскоку інформація з residual'у про "удар" не має сенсу.
-    # Умова frames_since_update <= bounce_max_coast: тригерити відскок ЛИШЕ
-    # коли позиція підкріплена свіжою детекцією. Без цього (аудит 2026-05-30)
-    # тригер вистрелював на ФАНТОМНИХ коастинг-траєкторіях: трек, що загубив
-    # м'яч, екстраполює вниз під гравітацією, Y падає <0.55, і bounce-режим
-    # "відскакує" уявний м'яч (tsu=17-80), хоча реальний м'яч уже за 4-5 м
-    # угорі. Реальний відскок має tsu≈0. Це розколювало цілісні треки на
-    # уламки (fragmentation 0.235→0.412).
     if y < bounce_height_max and vy < 0 and frames_since_update <= bounce_max_coast:
         M[0] = [0.10, 0.05, 0.85]
         M[1] = [0.10, 0.05, 0.85]
         return M
 
-    # Тригер 2: mid-air hit за residual'ом. Лінійна інтерполяція рядка
-    # M[0] у бік M_hit_target. M_hit_target обрано КОНСЕРВАТИВНИМ:
-    # навіть при alpha=1 (residual на самому гейті) M[0,0] лишається
-    # 0.60 (sticky-ballistic), а Hit-ймовірність зростає лише до 0.35.
-    # Сильніший shift ([0.30, 0.65, 0.05], який пробували першою
-    # ітерацією) призводив до осциляції Ballistic↔Hit, бо після
-    # переходу до Hit residual різко падав (більша Q абсорбує
-    # неочікувану швидкість), trigger переставав вистрелювати, IMM
-    # повертався у Ballistic, residual знов зростав → нескінченний
-    # цикл. Менш агресивний target гасить осциляцію.
     if mahalanobis_sq > hit_residual_min_sq:
         alpha = min(
             1.0,
