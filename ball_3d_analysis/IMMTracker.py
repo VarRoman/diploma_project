@@ -6,69 +6,46 @@ import cv2
 
 
 def create_imm_estimator(z_initial, dt=0.02, v_initial=None):
-    """
-    Створює IMM-естиматор з трьох UKF (ballistic / hit / bounce).
+    """Build an IMM estimator from three UKFs (ballistic / hit / bounce).
 
-    :param z_initial: 3-вектор світової позиції м'яча [x, y, z] при ініціалізації.
-    :param dt:        крок часу (= 1 / FPS).
-    :param v_initial: опціональний 3-вектор початкових швидкостей [vx, vy, vz]
-                      у м/с. Якщо None — швидкості ініціалізуються нулями.
-                      Передавайте оцінку (z_k − z_{k−1}) / Δt, коли можемо
-                      пов'язати поточну детекцію з найближчою попередньою
-                      незасоційованою детекцією — це різко скорочує час
-                      сходження UKF-фільтрів і запобігає катастрофічним
-                      сплескам у |residual|/Mahalanobis у перші кадри
-                      життя нового треку.
+    z_initial: world position [x, y, z] at init.
+    dt:        time step (= 1 / FPS).
+    v_initial: optional initial velocity [vx, vy, vz] in m/s. None -> zeros.
+               Passing (z_k - z_{k-1}) / dt speeds up UKF convergence and
+               avoids residual/Mahalanobis spikes in a new track's first frames.
     """
-    # dt is forwarded from IMMTracker (1 / source FPS);
-    # default corresponds to 50 FPS.
-    # Step 2.B (Phase 3): 6D CV-state → 9D CA-state.
-    # state = [x, vx, ax, y, vy, ay, z, vz, az]
+    # 9D constant-acceleration state: [x, vx, ax, y, vy, ay, z, vz, az].
     dim_x = 9
     dim_z = 3
     points = MerweScaledSigmaPoints(n=dim_x, alpha=.1, beta=2., kappa=1.)
-    # P_init для 9D стану. Накачуємо коваріацію accel ~25 (м/с²)²
-    # (σ_a ≈ 5 м/с²) — це дозволяє фільтру швидко поглинути перший
-    # ненульовий accel із вимірювань, не вибухнувши гейтом одразу.
-    # Якщо швидкість ініціалізована з фінітної різниці двох детекцій, її
-    # σ становить ≈ √2·σ_R/Δt (від ~7 м/с до ~14 м/с при дефолтних R, dt),
-    # тому коваріація швидкостей лишається 50.
+    # Initial covariance. Accel variance ~25 (m/s^2)^2 lets the filter absorb
+    # the first non-zero acceleration without immediately blowing the gate;
+    # velocity variance 50 covers the finite-difference bootstrap spread.
     P_init = np.diag([
         0.1, 50.0, 25.0,
         0.1, 50.0, 25.0,
         0.1, 50.0, 25.0,
     ])
-    # R: коваріація шуму вимірювання у світових координатах [x, y, z] (м²).
-    # σ_z ≈ 0.7 м (моно-камерна глибина має таку похибку через
-    # Z_c = f·D / bbox_w). Користувач підтвердив, що ці значення дають
-    # приємну плавність — спроба зменшити σ_z до 0.5 м (для зменшення
-    # відставання) робила траєкторію надто рваною.
+    # Measurement noise (m^2). sigma_z ~ 0.7 m reflects monocular depth error
+    # (Z_c = f*D / bbox_w); tighter values made trajectories too jagged.
     R_init = np.diag([0.02, 0.02, 0.5])
 
-    # Q-матриці для 9D CA-state. У Q_discrete_white_noise(dim=3, ...)
-    # параметр var має семантику "дисперсія шуму джерку" — нижня
-    # права клітинка блоку = var, що задає, наскільки accel може
-    # випадково "крутитися" за крок.
-    #
-    # ballistic: var=0.1 — м'яч у вільному польоті фактично має accel = g
-    # + drag (smooth), залишковий accel-state ≈ 0; шум джерку маленький.
+    # Process noise per model. In Q_discrete_white_noise(dim=3) var is the
+    # jerk variance (bottom-right block cell), i.e. how much accel may drift.
+    # ballistic: small jerk noise (free flight is smooth, residual accel ~0).
     q_var_ballistic = 0.1
     q_b = Q_discrete_white_noise(dim=3, dt=dt, var=q_var_ballistic)
     Q_ballistic = block_diag(q_b, q_b, q_b)
 
-    # hit: var=400 — це σ_jerk ≈ 20 (м²/с^6)^{1/2}, що дозволяє accel-стейту
-    # "прокинутись" від ~0 до десятків м/с² за один-два кадри. Тобто
-    # імпульсний удар реалізується НЕ через стрибок швидкості напряму,
-    # а через ріст accel-стейту, який потім інтегрується у швидкість.
-    # Це структурне моделювання маневру (CV-CA IMM Singer-style), на
-    # відміну від наївного збільшення Q[v], що ламало гейтинг у 6D-версії.
+    # hit: large jerk noise lets accel jump from ~0 to tens of m/s^2 in a frame
+    # or two. The impulse is modelled through accel growth (Singer-style CA),
+    # not a raw velocity jump that broke gating in the old 6D version.
     q_var_hit = 400
     q_h = Q_discrete_white_noise(dim=3, dt=dt, var=q_var_hit)
     Q_hit = block_diag(q_h, q_h, q_h)
 
-    # bounce: var=5 — помірний шум джерку. Після контакту з підлогою
-    # fx_bounce уже скидає accel у 0; Q[a] лише страхує від raptових
-    # відхилень у наступних кадрах.
+    # bounce: moderate jerk noise; fx_bounce already resets accel to 0 on
+    # contact, Q[a] only guards against abrupt deviations in later frames.
     q_var_bounce = 5
     q_bnc = Q_discrete_white_noise(dim=3, dt=dt, var=q_var_bounce)
     Q_bounce = block_diag(q_bnc, q_bnc, q_bnc)
@@ -102,12 +79,9 @@ def create_imm_estimator(z_initial, dt=0.02, v_initial=None):
 
     imm = IMMEstimator(filters_lt, mu, M_base)
 
-    # Ініціалізуємо 9D стан [x, vx, ax, y, vy, ay, z, vz, az].
-    # Якщо передано v_initial — використовуємо його; інакше — нулі.
-    # accel-компоненти завжди стартують з 0: ми не знаємо, чи м'яч
-    # був у момент ініціалізації під дією impulse'у; пріор accel=0
-    # відповідає чистій балістиці. Високий P_init[a]=25 дозволяє
-    # фільтру швидко "виявити" ненульовий accel при потребі.
+    # Initialise the 9D state. Use v_initial if given, else zero velocity.
+    # Accel always starts at 0 (ballistic prior); the high P_init[a] lets the
+    # filter discover a non-zero acceleration when needed.
     if v_initial is None:
         vx0 = vy0 = vz0 = 0.0
     else:
@@ -120,67 +94,50 @@ def create_imm_estimator(z_initial, dt=0.02, v_initial=None):
     ])
     for f in imm.filters:
         f.x = initial_x.copy()
-        # filterpy.IMMEstimator у конструкторі копіює f.x_post у imm.x_post
-        # ОДИН РАЗ — і це відбувається ДО того, як ми перезаписали f.x.
-        # Якщо не перевизначити f.x_post тут вручну, у першому snapshot треку
-        # (на кадрі-народжування, ДО першого update'у) у JSONL потрапляє
-        # zeros(6) → live_view/overlay малюють точку у світовому (0,0,0) =
-        # лівий-передній кут майданчика → видима "лінія з кута" для кожного
-        # нового треку. Поле x_post не впливає на predict/update — це лише
-        # post-step snapshot для логування — тому правка безпечна.
+        # IMMEstimator copies f.x_post into imm.x_post once, in its constructor,
+        # before we overwrite f.x. Without re-setting f.x_post here, the birth
+        # snapshot logs zeros -> overlay draws a (0,0,0) world point. x_post is
+        # only a logging snapshot, so this does not affect predict/update.
         f.x_post = initial_x.copy()
     imm._compute_state_estimate()
-    # Те саме на рівні IMM-агрегації: imm.x_post читається у snapshot_track
-    # з run_segment.py:214. Перевизначаємо тут до повернення.
+    # Same for the IMM aggregate read by snapshot_track in run_segment.
     imm.x_post = initial_x.copy()
 
     return imm
 
 class Track:
-    # Санітарне обмеження на bootstrap-швидкість (м/с): якщо обчислена з
-    # фінітної різниці швидкість перевищує цей поріг — bootstrap НЕ
-    # застосовуємо, бо це майже напевно з'єднання двох різних об'єктів.
-    BOOTSTRAP_MAX_SPEED = 35.0
+    # Sanity cap on bootstrap velocity (m/s): above this the finite-difference
+    # almost certainly linked two different objects, so bootstrap is skipped.
+    bootstrap_max_speed = 35.0
 
-    # Step 2.A (Phase 3): track-level covariance reset on radical residual.
-    # Якщо поточний Mahalanobis^2 високий (хвіст ~5% χ²₃), вважаємо, що
-    # м'яч щойно зробив імпульсний маневр (удар, блок) — і "відкриваємо"
-    # коваріацію швидкості та прискорення ПЕРЕД викликом imm.update(z).
-    # Більший P[v, a] = більший Kalman gain → новий вимір швидко
-    # "втягує" state у нову траєкторію без багатокадрового лагу.
-    # Без цього: після удару фільтр бачить residual ≈ 1 м (z прискорився
-    # геометрично), повільно зменшує його за 3-5 кадрів, накопичує
-    # фантомні mah > гейту, і час від часу втрачає трек.
-    COV_RESET_MAH_SQ_THRESHOLD = 8.0   # ~95-й перцентиль χ²₃
-    COV_RESET_INFLATE_V = 50.0         # (м/с)² — той самий рівень, що P_init[v]
-    COV_RESET_INFLATE_A = 100.0        # (м/с²)² — 4× P_init[a], сильна "відкритість"
+    # Track-level covariance reset on a radical residual. A high Mahalanobis^2
+    # (~5% tail of chi^2_3) means an impulsive manoeuvre (hit/block); we
+    # "open up" velocity/accel covariance before imm.update(z) so the new
+    # measurement pulls the state onto the new trajectory without multi-frame lag.
+    cov_reset_mah_sq_threshold = 8.0   # ~95th percentile of chi^2_3
+    cov_reset_inflate_v = 50.0         # (m/s)^2 — same level as P_init[v]
+    cov_reset_inflate_a = 100.0        # (m/s^2)^2 — 4x P_init[a]
 
-    # Phase B: Delayed-accept hysteresis.
-    # Підозріла детекція (mah_sq > THRESHOLD) не приймається одразу — вона
-    # "заморожується" у _pending і чекає підтвердження з наступних кадрів.
-    # Якщо підтвердження є (наступна детекція теж далеко) — маневр реальний.
-    # Якщо наступна детекція повернулась до норми — pending був FP, скидається.
-    HYSTERESIS_MAH_SQ_THRESHOLD = 8.0   # поріг "підозри" (збігається з COV_RESET)
-    HYSTERESIS_CONFIRM_THRESHOLD = 5.0  # mah_sq наступної < цього → pending є FP
-    HYSTERESIS_WINDOW = 6               # максимум кадрів очікування підтвердження
-    COAST_THRESHOLD = 4                 # пропусків поспіль = "коастинг": висока
-                                        # mah_sq очікувана (P зросла природно),
-                                        # а не симптом маневру — не inflate, не defer
+    # Delayed-accept hysteresis. A suspicious detection (mah_sq > threshold) is
+    # frozen in _pending and waits for confirmation from later frames: if the
+    # next detection is also far, the manoeuvre is real; if it returns to
+    # normal, the pending was a false positive and is dropped.
+    hysteresis_mah_sq_threshold = 8.0   # suspicion threshold (= cov_reset)
+    hysteresis_confirm_threshold = 5.0  # next mah_sq below this -> pending was FP
+    hysteresis_window = 6               # max frames to wait for confirmation
+    coast_threshold = 4                 # consecutive misses = coasting: high
+                                        # mah_sq is expected (P grew naturally),
+                                        # not a manoeuvre -> no inflate, no defer
 
-    # Coast covariance cap. Під час коастингу P росте необмежено (вимір.
-    # дані: P_vel 2.5→700, P_pos 0→243, P_acc→1330 за 57 кадрів). При
-    # P_vel~300-700 sigma-точки UKF розповзаються на ±17-26 м/с, і
-    # КВАДРАТИЧНИЙ drag (a=-k·|v|·v у fx_ballistic) через нерівність Єнсена
-    # тягне sigma-mean швидкості до нуля, ПЕРЕБИВАЮЧИ лінійний gravity-term
-    # (-g) → vy замерзає (~-1 м/с) замість розгону вниз → трек «висить»
-    # замість балістичної дуги (tid4 завис на y=8 м усі 80 кадрів коастингу
-    # замість падіння під гравітацією). Кап тримає sigma-точки тісними →
-    # gravity знову домінує → чиста парабола поза кадром. Капи на рівні
-    # P_init (vel) / cov-reset (acc); pos=9 (±3 м) узгоджено з Gate A
-    # residual-стелажем, тримає Mahalanobis-гейт осмисленим на коастингу.
-    COAST_P_POS_CAP = 9.0    # (м²) — ±3 м, = Gate A max_assoc_residual
-    COAST_P_VEL_CAP = 50.0   # (м/с)² — = P_init[v]
-    COAST_P_ACC_CAP = 100.0  # (м/с²)² — = COV_RESET_INFLATE_A
+    # Coast covariance cap. While coasting P grows unbounded; large P_vel
+    # spreads the UKF sigma points so wide that the quadratic drag (Jensen)
+    # pulls the sigma-mean velocity toward zero and overrides gravity -> vy
+    # freezes and the track "hangs" instead of following a ballistic arc. The
+    # cap keeps sigma points tight so gravity dominates again. pos cap = 9 m^2
+    # (+-3 m) matches Gate A so the Mahalanobis gate stays meaningful.
+    coast_p_pos_cap = 9.0    # (m^2) — +-3 m, = Gate A max_assoc_residual
+    coast_p_vel_cap = 50.0   # (m/s)^2 — = P_init[v]
+    coast_p_acc_cap = 100.0  # (m/s^2)^2 — = cov_reset_inflate_a
 
     def __init__(self, track_id, z_initial, dt, v_initial=None,
                  initial_hits=1, min_hits=3, enable_hysteresis=False,
@@ -190,61 +147,40 @@ class Track:
                  bounce_height_max=0.55, bounce_max_coast=3,
                  m_hit_target=None):
         """
-        :param enable_cov_reset: вмикає Step 2.A track-level covariance reset
-                            (inflate P[v,a] при mah_sq>поріг). Default False
-                            (Path B). Вимкнення лишає residual "пожити" 1-2
-                            кадри після маневру → hit-тригер встигає
-                            вистрілити і IMM-likelihood підіймає μ_hit.
-                            Увімкнений cov-reset снапить маневр за 1 кадр і
-                            короутить IMM-режими (cov-reset і hit —
-                            субститути за один і той самий residual-сигнал).
-        :param enable_hysteresis: вмикає Phase B delayed-accept hysteresis
-                            (відкладання підозрілих детекцій у _pending).
-                            Default False: на тест-даних гістерезис майже
-                            не вмикається, АЛЕ там, де вмикається, він
-                            канібалізує cov-reset (Step 2.A) та hit-тригер —
-                            усі три ділять поріг mah_sq=8, і defer обнуляє
-                            _last_mahalanobis_sq, тож наступний predict не
-                            бачить residual'у для hit-режиму. Тримаємо OFF,
-                            доки не доналаштуємо cov-reset+hit; coast-skip
-                            (через _missed_streak) лишається активним
-                            незалежно від прапорця — це обробка оклюзії,
-                            а не defer.
-        :param v_initial:   опціональний 3-вектор початкових швидкостей.
-                            Якщо передано — UKF-фільтри стартують зі
-                            «справжнім» вектором швидкості замість нулів.
-        :param initial_hits: к-сть hits, з якою стартує трек. Для
-                            bootstrap'нутих треків розумно ставити 2
-                            (бо ми фактично спостерігали дві послідовні
-                            детекції — попередню «незасоційовану» та
-                            поточну). Дозволяє швидше промувати трек до
-                            'Confirmed', не чекаючи зайвого кадру.
-        :param min_hits:    к-сть оновлень (hits), необхідна для переходу
-                            трек у стан 'Confirmed'. Раніше було
-                            захардкоджено 3 — тепер прокидається з
-                            IMMTracker (CLI), щоб параметр з sweep'а
-                            справді впливав на трек-стейт-машину.
+        enable_cov_reset: inflate P[v,a] when mah_sq > threshold. Default False
+                          (lets the residual live 1-2 frames so the hit trigger
+                          fires and IMM likelihood raises mu_hit; cov-reset and
+                          hit are substitutes for the same residual signal).
+        enable_hysteresis: delayed-accept defer of suspicious detections. Default
+                          False (defer cannibalises cov-reset and the hit trigger
+                          — all three share mah_sq=8 — and zeroes the residual
+                          the next predict needs). Coast-skip via _missed_streak
+                          stays active regardless: that handles occlusion, not defer.
+        v_initial:        optional initial velocity vector; lets the UKFs start
+                          with a real velocity instead of zeros.
+        initial_hits:     hits the track starts with. Bootstrapped tracks use 2
+                          (two consecutive detections were effectively seen),
+                          promoting to Confirmed one frame sooner.
+        min_hits:         updates needed to reach 'Confirmed'. Forwarded from
+                          IMMTracker (CLI) so the swept parameter affects the
+                          track state machine.
         """
         self.track_id = track_id
         self.dt = float(dt)
         self.enable_hysteresis = bool(enable_hysteresis)
         self.enable_cov_reset = bool(enable_cov_reset)
         self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
-        # Coast Z-fence (2026-06-04): під час коастингу немає вимірювання, тож
-        # жоден гейт не діє — predict() екстраполює світову глибину Z (індекс 6)
-        # за контамінованою depth-швидкістю vz (індекс 7). На даних: vz доростає
-        # до ±19 м/с (бо біля межі видимої області w_box обвалюється → Z=f·D/w
-        # роздувається), і коаст несе м'яч у Z=33-42 м — фізично неможливо на
-        # майданчику 18 м. Фенс клампить Z прогнозу у [coast_z_min, coast_z_max]
-        # і гасить vz/az, які штовхають за фенс. Якщо м'яч справді покинув корт —
-        # max_age його видалить; доки коастить у межах — глибина лишається
-        # фізичною. Діє ЛИШЕ під час коасту (mark_missed), не чіпає update-кадри.
+        # Coast Z-fence: while coasting there is no measurement, so no gate acts
+        # and predict() extrapolates world depth Z (idx 6) from a contaminated
+        # depth velocity vz (idx 7). Near the frame edge w_box collapses, Z=f*D/w
+        # inflates, and coasting carries the ball to Z=33-42 m (court is 18 m).
+        # The fence clamps predicted Z to [coast_z_min, coast_z_max] and damps
+        # vz/az that push past it. Active only during coasting (mark_missed).
         self.enable_coast_z_fence = bool(enable_coast_z_fence)
         self.coast_z_min = float(coast_z_min)
         self.coast_z_max = float(coast_z_max)
-        # IMM-тригери (Phase F експеримент): прокидаються у
-        # get_dynamic_transition_matrix кожного predict(). Дефолти збігаються
-        # з сигнатурою функції — A/B-сумісність зі старими прогонами.
+        # IMM triggers, forwarded to get_dynamic_transition_matrix on each
+        # predict(). Defaults match the function signature (A/B compatibility).
         self.hit_residual_min_sq = float(hit_residual_min_sq)
         self.hit_residual_max_sq = float(hit_residual_max_sq)
         self.bounce_height_max = float(bounce_height_max)
@@ -253,30 +189,27 @@ class Track:
                              else np.asarray(m_hit_target, dtype=float))
         self.imm = create_imm_estimator(z_initial, dt, v_initial=v_initial)
 
-        # Запам'ятовуємо ПЕРШУ детекцію — використовується для
-        # внутрішньо-трекного bootstrap'у швидкості на другому хіті.
-        # Якщо v_initial вже передано ззовні (Mechanism B з IMMTracker),
-        # повторний bootstrap пропускаємо.
+        # Remember the first detection for intra-track velocity bootstrap on the
+        # second hit. Skip it if v_initial was already supplied externally.
         self.z_initial = np.asarray(z_initial, dtype=float).copy()
         self._velocity_bootstrapped = (v_initial is not None)
 
-        # Життєвий цикл
-        self.state = 'Tentative'  # Можливі: 'Tentative', 'Confirmed', 'Deleted'
+        # Lifecycle
+        self.state = 'Tentative'  # 'Tentative', 'Confirmed', 'Deleted'
         self.time_since_update = 0
         self.hits = int(initial_hits)
         self.hit_streak = int(initial_hits)
         self.min_hits = int(min_hits)
-        # Останній прийнятий Mahalanobis^2 (gating-residual) — передається
-        # у get_dynamic_transition_matrix для активації hit-тригера у
-        # наступному predict(). Скидається у 0 після кадрів без оновлень.
+        # Last accepted Mahalanobis^2 (gating residual), passed to
+        # get_dynamic_transition_matrix to activate the hit trigger on the next
+        # predict(). Reset to 0 after frames without updates.
         self._last_mahalanobis_sq = 0.0
-        # Phase B: hysteresis state
-        self._pending = None               # Optional[Tuple[np.ndarray, float]]: (z, mah_sq)
-        self._pending_frames_elapsed = 0  # кадрів з моменту встановлення pending
-        self._missed_streak = 0           # послідовних mark_missed (для coast detection)
-        # 9D h_matrix: позиційні компоненти — індекси 0, 3, 6 у state
-        # [x, vx, ax, y, vy, ay, z, vz, az]. Швидкості та прискорення
-        # не вимірюються напряму, лише оцінюються через UKF.
+        # Hysteresis state
+        self._pending = None               # Optional[(z, mah_sq)]
+        self._pending_frames_elapsed = 0  # frames since pending was set
+        self._missed_streak = 0           # consecutive mark_missed (coast detect)
+        # Position-extraction matrix: indices 0, 3, 6 of the 9D state. Velocities
+        # and accelerations are not measured, only estimated by the UKF.
         self.h_matrix = np.array([
             [1, 0, 0, 0, 0, 0, 0, 0, 0],   # x
             [0, 0, 0, 1, 0, 0, 0, 0, 0],   # y
@@ -284,33 +217,30 @@ class Track:
         ], dtype=float)
 
     def _inflate_covariance(self):
-        """Inflate P[v,a] для всіх sub-фільтрів та IMM-агрегації."""
+        """Inflate P[v,a] for every sub-filter and the IMM aggregate."""
         for f in self.imm.filters:
-            f.P[1, 1] += self.COV_RESET_INFLATE_V
-            f.P[4, 4] += self.COV_RESET_INFLATE_V
-            f.P[7, 7] += self.COV_RESET_INFLATE_V
-            f.P[2, 2] += self.COV_RESET_INFLATE_A
-            f.P[5, 5] += self.COV_RESET_INFLATE_A
-            f.P[8, 8] += self.COV_RESET_INFLATE_A
-        self.imm.P[1, 1] += self.COV_RESET_INFLATE_V
-        self.imm.P[4, 4] += self.COV_RESET_INFLATE_V
-        self.imm.P[7, 7] += self.COV_RESET_INFLATE_V
-        self.imm.P[2, 2] += self.COV_RESET_INFLATE_A
-        self.imm.P[5, 5] += self.COV_RESET_INFLATE_A
-        self.imm.P[8, 8] += self.COV_RESET_INFLATE_A
+            f.P[1, 1] += self.cov_reset_inflate_v
+            f.P[4, 4] += self.cov_reset_inflate_v
+            f.P[7, 7] += self.cov_reset_inflate_v
+            f.P[2, 2] += self.cov_reset_inflate_a
+            f.P[5, 5] += self.cov_reset_inflate_a
+            f.P[8, 8] += self.cov_reset_inflate_a
+        self.imm.P[1, 1] += self.cov_reset_inflate_v
+        self.imm.P[4, 4] += self.cov_reset_inflate_v
+        self.imm.P[7, 7] += self.cov_reset_inflate_v
+        self.imm.P[2, 2] += self.cov_reset_inflate_a
+        self.imm.P[5, 5] += self.cov_reset_inflate_a
+        self.imm.P[8, 8] += self.cov_reset_inflate_a
 
     def _collapse_accel_to_ballistic(self):
-        """Занулює залишкове прискорення (індекси 2, 5, 8) у всіх станах.
+        """Zero the residual acceleration (indices 2, 5, 8) in all states.
 
-        Викликається при коастингу (mark_missed). Залишковий accel у 9D
-        CA-стані валідний лише поки його підтверджують виміри: без виміру
-        predict() інтегрує застаріле ax у швидкість щокадру (vx += ax·dt) →
-        трек РОЗГАНЯЄТЬСЯ і летить через увесь корт (аномалія кадрів
-        611-650: vX тікав −3.2 → −9.7 за 33 кадри оклюзії, X 7.2 → 2.4).
-        Фізично м'яч між контактами має нульовий залишковий accel — лише
-        g + drag, які вже driving-terms у fx_*. Колапс до балістики лишає
-        коастинг constant-velocity замість нестабільної CA-екстраполяції.
-        Швидкість/позиція не чіпаються (вони фізично виправдані), P також.
+        Called while coasting (mark_missed). Without a measurement, predict()
+        keeps integrating stale accel into velocity (vx += ax*dt) and the track
+        accelerates across the court. Physically the ball between contacts has
+        zero residual accel (only g + drag, already driving terms in fx_*), so
+        collapsing to ballistic keeps coasting at constant velocity. Velocity,
+        position and P are left untouched.
         """
         for f in self.imm.filters:
             f.x[2] = f.x[5] = f.x[8] = 0.0
@@ -320,13 +250,11 @@ class Track:
 
     @staticmethod
     def _cap_P_matrix(P, caps):
-        """PD-безпечний кап діагоналі P до caps[i]. Для кожного i з
-        P[i,i] > caps[i] масштабуємо рядок І стовпець i на s=√(cap/P[i,i]).
-        Це конгруентне перетворення D·P·D (D=diag, d_i=s), що ЗБЕРІГАЄ
-        додатну визначеність (на відміну від наївного P[i,i]=cap, яке при
-        великих позадіагональних кореляціях ламає PD → Cholesky-збій у
-        sigma-точках UKF). Off-діагоналі масштабуються пропорційно, тож
-        кореляційна структура лишається валідною."""
+        """PD-safe cap of the P diagonal to caps[i]. For each i with
+        P[i,i] > caps[i] scale row and column i by s = sqrt(cap/P[i,i]). This
+        congruence transform D*P*D preserves positive-definiteness (unlike a
+        naive P[i,i]=cap, which can break PD and fail the UKF Cholesky); the
+        off-diagonals scale proportionally, keeping correlations valid."""
         for i in range(P.shape[0]):
             if P[i, i] > caps[i]:
                 s = np.sqrt(caps[i] / P[i, i])
@@ -334,28 +262,25 @@ class Track:
                 P[:, i] *= s
 
     def _cap_coast_covariance(self):
-        """Обмежує ріст P-діагоналі під час коастингу (див. COAST_P_*_CAP).
-        Без капу P росте необмежено → sigma-точки UKF розповзаються →
-        квадратичний drag глушить gravity у sigma-mean → vy замерзає, трек
-        «висить» замість балістичної дуги. Кап тримає sigma тісними →
-        чиста парабола. Доповнює Gate A (обидва б'ють runaway P)."""
+        """Cap P-diagonal growth while coasting (see coast_p_*_cap). Without it
+        P grows unbounded, the UKF sigma points spread, the quadratic drag damps
+        gravity in the sigma-mean, vy freezes and the track hangs instead of
+        following a ballistic arc. Complements Gate A."""
         caps = np.array([
-            self.COAST_P_POS_CAP, self.COAST_P_VEL_CAP, self.COAST_P_ACC_CAP,
-            self.COAST_P_POS_CAP, self.COAST_P_VEL_CAP, self.COAST_P_ACC_CAP,
-            self.COAST_P_POS_CAP, self.COAST_P_VEL_CAP, self.COAST_P_ACC_CAP,
+            self.coast_p_pos_cap, self.coast_p_vel_cap, self.coast_p_acc_cap,
+            self.coast_p_pos_cap, self.coast_p_vel_cap, self.coast_p_acc_cap,
+            self.coast_p_pos_cap, self.coast_p_vel_cap, self.coast_p_acc_cap,
         ])
         for f in self.imm.filters:
             self._cap_P_matrix(f.P, caps)
         self._cap_P_matrix(self.imm.P, caps)
 
     def _fence_coast_depth(self):
-        """Клампить світову глибину Z (індекс 6) під час коасту в межі
-        [coast_z_min, coast_z_max] і гасить depth-швидкість/прискорення
-        (vz=7, az=8), що штовхають за фенс. Застосовується до ВСІХ внутрішніх
-        UKF-фільтрів (їхні x та x_prior — основа sigma-точок наступного
-        predict) та до mixed-стану imm (репортиться в overlay). Без цього
-        контамінована vz екстраполює Z до 30-42 м (див. enable_coast_z_fence).
-        P не чіпаємо — за нього відповідає Gate C (coast_cov_cap)."""
+        """Clamp world depth Z (idx 6) while coasting to [coast_z_min,
+        coast_z_max] and damp the depth velocity/accel (vz=7, az=8) that push
+        past the fence. Applied to all UKF filters (their x and x_prior seed the
+        next sigma points) and to the mixed imm state (reported in overlay).
+        P is left to Gate C (coast_cov_cap)."""
         zlo, zhi = self.coast_z_min, self.coast_z_max
 
         def _clamp(x):
@@ -377,7 +302,7 @@ class Track:
         _clamp(self.imm.x_prior)
 
     def predict(self):
-        # 9D state: y = x[3], vy = x[4] (було 6D: x[2], x[3]).
+        # 9D state: y = x[3], vy = x[4].
         self.imm.M = get_dynamic_transition_matrix(
             self.imm.x[3], self.imm.x[4],
             mahalanobis_sq=self._last_mahalanobis_sq,
@@ -391,38 +316,35 @@ class Track:
         self.imm.predict()
         if self._pending is not None:
             self._pending_frames_elapsed += 1
-            if self._pending_frames_elapsed > self.HYSTERESIS_WINDOW:
-                # Вікно підтвердження вичерпане — скидаємо pending і
-                # відновлюємо нормальне старіння.
+            if self._pending_frames_elapsed > self.hysteresis_window:
+                # Confirmation window exhausted: drop pending, resume ageing.
                 self._pending = None
                 self._pending_frames_elapsed = 0
                 self.time_since_update += 1
-            # else: трек не старіє під час активного вікна hysteresis
+            # else: track does not age during an active hysteresis window
         else:
             self.time_since_update += 1
 
     def update(self, z, R=None):
-        # R — опційна per-detection коваріація вимірювання (адаптивний σ_Z).
-        # None → IMM-фільтри беруть власний фіксований self.R.
+        # R: optional per-detection measurement covariance (adaptive sigma_Z).
+        # None -> the IMM filters use their own fixed self.R.
         current_mah_sq = self._last_mahalanobis_sq
 
-        # ── Phase B: Delayed-accept hysteresis ────────────────────────────────
-        # Defer-механізм (pending) увімкнено лише при enable_hysteresis.
-        # Coast-skip (через _missed_streak) лишається активним завжди — це
-        # обробка повернення з оклюзії, а не відкладання детекції.
-        _coast_skip = False  # True → пропустити inflate та hysteresis-тригер
+        # Delayed-accept hysteresis. Defer (pending) runs only with
+        # enable_hysteresis. Coast-skip (via _missed_streak) is always active:
+        # it handles return from occlusion, not detection deferral.
+        _coast_skip = False  # True -> skip inflate and the hysteresis trigger
 
         if self.enable_hysteresis and self._pending is not None:
             pending_z, _ = self._pending
             self._pending = None
             self._pending_frames_elapsed = 0
 
-            if current_mah_sq >= self.HYSTERESIS_CONFIRM_THRESHOLD:
-                # Обидва кадри далеко від прогнозу → реальний маневр підтверджено.
-                # Inflate P + update з поточним z.
-                # pending_z (пізній вимір) не застосовуємо: подвійний imm.update()
-                # без predict() між ними порушує PD-властивість P → Cholesky fail.
-                # Inflate + поточний z достатньо для фіксації нової траєкторії.
+            if current_mah_sq >= self.hysteresis_confirm_threshold:
+                # Both frames far from the prediction -> real manoeuvre. Inflate
+                # P and update with the current z. pending_z (the late
+                # measurement) is not applied: a second imm.update() without a
+                # predict() between them breaks PD of P (Cholesky fail).
                 self._inflate_covariance()
                 self.imm.update(z, R=R)
                 self.time_since_update = 0
@@ -433,45 +355,36 @@ class Track:
                 self._missed_streak = 0
                 return
 
-            # mah_sq < CONFIRM_THRESHOLD → поточна детекція повернулась до
-            # нормальної траєкторії → pending був false-positive.
-            # Продовжуємо нормальним update без inflate та без нового тригера.
+            # mah_sq < confirm threshold -> the detection returned to a normal
+            # trajectory -> pending was a false positive. Continue with a normal
+            # update, no inflate and no new trigger.
             _coast_skip = True
             self._missed_streak = 0
 
-        elif self._missed_streak >= self.COAST_THRESHOLD:
-            # Трек довго не бачив м'яча → висока mah_sq є ОЧІКУВАНОЮ
-            # (коваріація P зросла природно під час коастингу), а не
-            # ознакою маневру. Пропускаємо inflate і hysteresis-тригер.
+        elif self._missed_streak >= self.coast_threshold:
+            # Long miss streak -> high mah_sq is expected (P grew naturally while
+            # coasting), not a manoeuvre. Skip inflate and the hysteresis trigger.
             _coast_skip = True
             self._missed_streak = 0
 
         elif (self.enable_hysteresis and z is not None
-              and current_mah_sq > self.HYSTERESIS_MAH_SQ_THRESHOLD):
-            # Підозріла детекція — відкладаємо її на підтвердження.
+              and current_mah_sq > self.hysteresis_mah_sq_threshold):
+            # Suspicious detection: defer it for confirmation.
             self._pending = (np.asarray(z, dtype=float).copy(), current_mah_sq)
             self._pending_frames_elapsed = 0
-            self.imm.update(None)   # екстраполяція замість прийняття
+            self.imm.update(None)   # extrapolate instead of accepting
             self.hit_streak = 0
             self._last_mahalanobis_sq = 0.0
             self._missed_streak += 1
             return
-        # ── End Phase B ────────────────────────────────────────────────────────
 
-        # Mechanism A — Intra-track velocity bootstrap.
-        # На переході hits=1 → 2 (тобто коли трек уперше отримує
-        # ДРУГУ детекцію після створення) UKF-фільтри ще мали v=0 у
-        # пріорі поточного кадру. Це призводить до:
-        #   1) несхожої позиції-прогнозу (за реальної v>0 ball дрейфує
-        #      від прогнозу) → велике |residual|, велика Mahalanobis;
-        #   2) повільного «зсуву» Kalman-gain'ом швидкості до правди
-        #      (через велику σ_v=√50≈7 м/с, K_v нікчемно мала за 1 крок).
-        # Виправляємо це примусово: ОБРАХОВУЄМО v_bootstrap з фінітної
-        # різниці (z − z_initial) / (gap·dt) і ВПИСУЄМО її у швидкісні
-        # компоненти кожного фільтра до того, як викличемо imm.update.
-        # Так predict-update проходять із коректним пріором швидкості з
-        # САМОГО ПЕРШОГО використання, а Mahalanobis на 3-му кадрі вже
-        # дорівнює 0–1 замість 3–4.
+        # Mechanism A — intra-track velocity bootstrap.
+        # On the hits=1 -> 2 transition the UKFs still had v=0 in the prior,
+        # which inflates the residual/Mahalanobis and makes the Kalman gain pull
+        # velocity to truth slowly. We compute v_bootstrap from the finite
+        # difference (z - z_initial)/(gap*dt) and write it into every filter
+        # before imm.update, so predict/update run with a correct velocity prior
+        # from the very first use.
         do_bootstrap = (
             z is not None
             and self.hits == 1
@@ -483,16 +396,11 @@ class Track:
             z_arr = np.asarray(z, dtype=float)
             v_boot = (z_arr - self.z_initial) / gap_dt
             speed = float(np.linalg.norm(v_boot))
-            if 0.0 < speed <= self.BOOTSTRAP_MAX_SPEED:
-                # Вписуємо швидкість у ВСІ внутрішні UKF-фільтри (вони
-                # роздільні; mixed-стан перерахується автоматично у
-                # imm.update → _compute_state_estimate).
-                # Так само переписуємо x_prior, бо саме він
-                # використовуватиметься у sigma-точках наступного
-                # predict.
-                # 9D state: швидкісні індекси [1, 4, 7] (було 6D: [1, 3, 5]).
-                # Accel-індекси (2, 5, 8) НЕ чіпаємо — лишаються 0 з
-                # create_imm_estimator (немає підстав bootstrap'ити).
+            if 0.0 < speed <= self.bootstrap_max_speed:
+                # Write velocity into all sub-filters and their x_prior (which
+                # seeds the next predict sigma points). Accel (2, 5, 8) is left
+                # at 0 — there is no basis to bootstrap it. Velocity indices are
+                # [1, 4, 7] in the 9D state.
                 for f in self.imm.filters:
                     f.x[1] = v_boot[0]
                     f.x[4] = v_boot[1]
@@ -500,7 +408,7 @@ class Track:
                     f.x_prior[1] = v_boot[0]
                     f.x_prior[4] = v_boot[1]
                     f.x_prior[7] = v_boot[2]
-                # mixed state теж оновлюємо.
+                # Update the mixed state too.
                 self.imm.x[1] = v_boot[0]
                 self.imm.x[4] = v_boot[1]
                 self.imm.x[7] = v_boot[2]
@@ -509,17 +417,15 @@ class Track:
                 self.imm.x_prior[7] = v_boot[2]
                 self._velocity_bootstrapped = True
 
-        # Step 2.A — Track-level covariance reset on radical residual.
-        # Виконується ПІСЛЯ Mechanism A bootstrap (щоб не конфліктувати:
-        # у bootstrap'ному кадрі м'яч ще не "робив" удар, він просто
-        # підхопив реальну швидкість), але ПЕРЕД imm.update(z).
-        # _coast_skip = True означає, що висока mah_sq є очікуваною
-        # (коастинг або resolved FP pending) — inflate не потрібен.
+        # Step 2.A — track-level covariance reset on a radical residual. Runs
+        # after the bootstrap (the bootstrap frame is not a hit) but before
+        # imm.update(z). _coast_skip means the high mah_sq is expected, so no
+        # inflate is needed.
         do_cov_reset = (
             self.enable_cov_reset
             and z is not None
             and not _coast_skip
-            and self._last_mahalanobis_sq > self.COV_RESET_MAH_SQ_THRESHOLD
+            and self._last_mahalanobis_sq > self.cov_reset_mah_sq_threshold
         )
         if do_cov_reset:
             self._inflate_covariance()
@@ -534,38 +440,31 @@ class Track:
 
     def mark_missed(self):
         self.hit_streak = 0
-        # На кадрах без вимірювання residual не визначений — скидаємо у 0,
-        # щоб у наступному predict() hit-тригер не активувався фантомно
-        # з застарілих даних.
+        # No measurement -> residual undefined. Reset to 0 so the next predict()
+        # does not fire the hit trigger from stale data.
         self._last_mahalanobis_sq = 0.0
-        self._missed_streak += 1  # Phase B: відстежуємо серію пропусків
-        self.imm.update(None)     # Екстраполяція без вимірювання
-        # Фікс кадрів 611-650: гасимо залишковий accel, щоб коастинг
-        # не розганявся через інтеграцію застарілого ax у швидкість.
+        self._missed_streak += 1
+        self.imm.update(None)     # extrapolate without a measurement
+        # Damp residual accel so coasting does not accelerate by integrating
+        # stale ax into velocity.
         self._collapse_accel_to_ballistic()
-        # Gate C: кап росту P-діагоналі під час коастингу. Без нього P_vel
-        # розбухає (2.5→700 за ~57 кадрів), сигма-точки UKF розкидаються
-        # ±17-26 м/с, квадратичний drag (Jensen) тягне середню швидкість до
-        # нуля й перебиває гравітацію → vy «замерзає», м'яч зависає замість
-        # балістичної дуги. Кап тримає екстраполяцію фізичною за межами кадру.
+        # Gate C: cap P-diagonal growth while coasting (keeps extrapolation
+        # physical past the frame edge).
         if self.enable_coast_cov_cap:
             self._cap_coast_covariance()
-        # Coast Z-fence: тримаємо екстрапольовану глибину фізичною (≤ майданчик).
+        # Coast Z-fence: keep extrapolated depth physical (<= court size).
         if self.enable_coast_z_fence:
             self._fence_coast_depth()
 
     def get_mahalanobis_distance(self, z, R_matrix):
-        """
-        Обчислює відстань Махаланобіса між прогнозом IMM та
-        новою детекцією.
-        """
-        # Проектуємо змішаний стан x_prior та коваріацію
-        # P_prior у простір вимірювань
+        """Mahalanobis distance between the IMM prediction and a new detection."""
+        # Project the mixed prior state x_prior and covariance P_prior into
+        # measurement space.
         z_mean = np.dot(self.h_matrix, self.imm.x_prior)
         S = np.dot(self.h_matrix, np.dot(self.imm.P_prior,
                         self.h_matrix.T)) + R_matrix
 
-        y = z - z_mean  # Вектор невязки
+        y = z - z_mean  # innovation
 
         try:
             S_inv = np.linalg.inv(S)
@@ -591,88 +490,33 @@ class IMMTracker:
                  bounce_height_max=0.55, bounce_max_coast=3,
                  m_hit_target=None):
         """
-        :param dt:                    крок часу (= 1 / FPS).
-        :param max_age:               к-сть кадрів без оновлення до
-                                      видалення треку.
-                                      Історія: 150 (sweep) → 15 (Plan A) →
-                                      80 (Phase B + edge-gate, чиста
-                                      розгортка).
-                                      Старий 150 давав 3-секундний
-                                      коастинг — підтверджений трек, що
-                                      втратив детекцію, балістично летiв
-                                      через увесь кадр i накопичував
-                                      "фантомнi" пiдтвердженi треки на
-                                      сміттєвих детекціях. Plan A зрізав до
-                                      15, щоб їх убити. Але edge-gate
-                                      (court-bounds у run_segment) тепер
-                                      прибирає самі викиди в джерелі, тож
-                                      головна причина для 15 зникла.
-                                      Розгортка з гейтом: 80 дає найкращу
-                                      fragmentation (0.235) + coverage
-                                      (0.907) при mode-switch 2.54 Гц
-                                      (нижче історичної бази ~3.5);
-                                      повний ~13-сек трек відновлюється.
-                                      100 доміновано 80-кою.
-        :param min_hits:              к-сть кадрів для підтвердження
-                                      треку (Tentative → Confirmed).
-        :param gating_threshold:      χ²-поріг гейтингу Махаланобіса.
-                                      χ²₃ p=0.99 = 11.34; default 16.0
-                                      пускає прикордонні детекції маневру
-                                      (mah 12-15) асоціюватись → оживляє
-                                      hit-режим без зростання проліферації.
-        :param bootstrap_max_gap_frames: максимальний розрив (кадри) між
-                                      пендінговою детекцією та поточною,
-                                      щоб виконати bootstrap швидкості.
-                                      Default 5 (= 0.1 с при 50 FPS).
-        :param bootstrap_max_dist:    максимальна 3D-відстань (м) між
-                                      пендінговою та поточною детекцією
-                                      для bootstrap. Default 2.5 м —
-                                      пасує для м'яча, що рухається до
-                                      ~25 м/с, при розривах ≤ 0.1 с.
-        :param bootstrap_max_speed:   санітарне обмеження на
-                                      bootstrap-швидкість (м/с). Якщо
-                                      обчислена |v| > цього порогу —
-                                      не використовуємо bootstrap
-                                      (швидше за все фальшиве з'єднання
-                                      двох різних об'єктів). Default 35
-                                      м/с — приблизна верхня межа подачі
-                                      елітного м'яча у волейболі.
-        :param enable_hysteresis:     вмикає Phase B delayed-accept
-                                      hysteresis у кожному Track. Default
-                                      False (див. Track.__init__ — defer
-                                      канібалізує cov-reset+hit). Прокидається
-                                      з run_segment через --enable_hysteresis.
-        :param enable_cov_reset:      вмикає Step 2.A covariance reset у
-                                      кожному Track. Default False (Path B),
-                                      щоб оживити IMM hit-режим. run_segment
-                                      --enable_cov_reset повертає назад.
-        :param enable_single_ball_nms: Phase C. Домен — один м'яч, тож
-                                      одночасно має бути лише ОДИН Confirmed-
-                                      трек. Якщо їх >1 (фантом-дублі від
-                                      сміттєвих спавнів / дивергентного
-                                      коастингу), лишаємо найкращий, решту
-                                      понижуємо до Tentative. Default True;
-                                      run_segment --disable_single_ball_nms.
-        :param enable_physical_gate:  Gate A. Коваріаційно-незалежний стелаж
-                                      на евклідів residual ||z − прогноз||.
-                                      Mahalanobis-гейт залежить від P, а P
-                                      необмежено роздувається під час коастингу
-                                      (tsu=47 → P_pos ~80-130) → стрибок-FP на
-                                      8 м дає mah≈0.7 < гейт і ПРИЙМАЄТЬСЯ
-                                      (катастрофа fr763/807/86: трек телепортує
-                                      на сміттєву детекцію). Фіксований стелаж
-                                      на residual незалежний від коастингу й
-                                      ловить fr763 (resid 7.95) так само, як
-                                      короткий коастинг ловив fr867 (mah=33).
-                                      Default True; run_segment
-                                      --disable_physical_gate.
-        :param max_assoc_residual:    поріг Gate A (м). Розподіл прийнятих
-                                      апдейтів: p99=7.95, але реальний-маневр
-                                      максимум ≈2.2 м (fr283 resid 2.19,
-                                      mah 13; подача fr650 resid 2.08); чиста
-                                      прірва 2.2 → 5.95 м до найближчого
-                                      телепорта. 3.0 м: +0.8 м над легіт-
-                                      максимумом, −3 м під телепортом.
+        dt:                 time step (= 1 / FPS).
+        max_age:            frames without an update before a track is deleted.
+        min_hits:           frames to confirm a track (Tentative -> Confirmed).
+        gating_threshold:   Mahalanobis chi^2 gate. chi^2_3 p=0.99 = 11.34;
+                            16.0 admits borderline manoeuvre detections
+                            (mah 12-15) to revive the hit mode without growth.
+        bootstrap_max_gap_frames: max gap (frames) between a pending detection
+                            and the current one to bootstrap velocity. Default 5.
+        bootstrap_max_dist: max 3D distance (m) between pending and current
+                            detection for bootstrap. Default 2.5 m.
+        bootstrap_max_speed: sanity cap (m/s); above it bootstrap is skipped
+                            (likely a false link of two objects). Default 35.
+        enable_hysteresis:  delayed-accept hysteresis per Track. Default False
+                            (defer cannibalises cov-reset + hit).
+        enable_cov_reset:   Step 2.A covariance reset per Track. Default False
+                            (Path B) to keep the IMM hit mode alive.
+        enable_single_ball_nms: one ball -> at most one Confirmed track. Extra
+                            confirmed tracks (phantom duplicates) are removed,
+                            keeping the best. Default True.
+        enable_physical_gate: Gate A. A covariance-independent ceiling on the
+                            Euclidean residual ||z - prediction||. The Mahalanobis
+                            gate depends on P, which inflates while coasting and
+                            lets an 8 m FP jump pass; a fixed ceiling does not.
+                            Default True.
+        max_assoc_residual: Gate A threshold (m). Real-manoeuvre residuals reach
+                            ~2.2 m; the nearest teleport jumps to ~6 m, so 3.0 m
+                            cleanly separates them.
         """
         self.dt = dt
         self.max_age = max_age
@@ -685,140 +529,101 @@ class IMMTracker:
         self.enable_hysteresis = bool(enable_hysteresis)
         self.enable_cov_reset = bool(enable_cov_reset)
         self.enable_single_ball_nms = bool(enable_single_ball_nms)
-        # Gate A: коваріаційно-незалежний фізичний стелаж на residual.
+        # Gate A: covariance-independent physical ceiling on the residual.
         self.enable_physical_gate = bool(enable_physical_gate)
         self.max_assoc_residual = float(max_assoc_residual)
-        # Gate C: кап росту P-діагоналі під час коастингу (передається у Track).
+        # Gate C: cap P-diagonal growth while coasting (forwarded to Track).
         self.enable_coast_cov_cap = bool(enable_coast_cov_cap)
-        # Gate D: придушення спавну паразитного треку, поки реальний Confirmed-
-        # трек КОРОТКО коастить. Домен — один м'яч. Коли м'яч на 1-2 кадри
-        # зникає (руки гравця, злиплий/стиснутий bbox), його w колапсує →
-        # implied Z стрибає на 5-11 м → Gate A (правильно) робить реальний трек
-        # коастуючим. АЛЕ та сама стрибуча детекція раніше спавнила КОНКУРЕНТА,
-        # який за min_hits кадрів ставав Confirmed і через single-ball NMS
-        # (tsu_tol=1) ПЕРЕХОПЛЮВАВ ідентичність у 48-хітового реального треку —
-        # filtZ телепортувало 6→16 м, ще й паразитна vz з bootstrap. Цей гейт
-        # НЕ дає народитись конкуренту, поки існує живий Confirmed-трек із
-        # 0 < tsu ≤ spawn_suppress_max_coast: викид просто ігнорується, а
-        # коастуючий трек ре-захоплює м'яч, щойно повернеться валідна (Gate A)
-        # детекція. Після цього порогу коасту м'яч вважається СПРАВДІ
-        # переміщеним → спавн знову дозволено (легітимний handoff після довгої
-        # втрати). 0 = вимкнено (A/B-сумісність). Рек. ~8 (вкриває типову
-        # оклюзію руками ≤8 кадрів при 50 FPS).
+        # Gate D: suppress spawning a parasite track while the real Confirmed
+        # track is briefly coasting (0 < tsu <= spawn_suppress_max_coast). One
+        # ball domain: a jumpy occluded detection used to spawn a competitor that
+        # then stole identity. 0 = disabled (A/B compatibility); ~8 covers a
+        # typical hand occlusion at 50 FPS.
         self.spawn_suppress_max_coast = int(spawn_suppress_max_coast)
-        # Gate A-depth: depth-robust Gate A. Розкладаємо residual на ЛАТЕРАЛЬ
-        # (X=idx0 ширина, Y=idx1 висота — це проєкція пікселя u,v, яку YOLO дає
-        # коректно навіть при оклюзії) та ГЛИБИНУ (Z=idx2 — монокулярна
-        # f·D/w, що деградує, коли w колапсує під час оклюзії руками).
-        # При оклюзії residual латералі лишається <1 м, а residual глибини
-        # стрибає на 4-11 м. Звичайний Gate A (||z−прогноз||) відкидає таку
-        # детекцію цілком → реальний трек коастить, ВТРАЧАЮЧИ хороше u,v
-        # (траєкторія відстає від м'яча — скарга користувача на Gate D).
-        # depth-robust замість цього: (1) гейтить ЛИШЕ латераль жорстко
-        # (hypot(dX,dY) ≤ max_assoc_residual) — детекцію з правильним u,v
-        # ПРИЙМАЄМО; (2) велику інновацію глибини НЕ відкидаємо, а сильно
-        # НЕДОВІРЯЄМО: роздуваємо σ_Z² на (depth_hold_gain·depth_innov)² і в
-        # гейтингу (Mahalanobis), і на update-кроці. Глибину тоді тримає
-        # прогноз (без телепорту 16 м), а латераль X,Y оновлюється з валідної
-        # детекції (траєкторія приклеєна до м'яча, як у overlay_D027). Реальний
-        # трек з'їдає детекцію → фантом не спавниться → Gate D непотрібен.
-        # Default False (A/B-сумісність). depth_hold_gain≈0.5: при innov=8 м
-        # σ_Z_eff≈4 м → детекція майже не зсуває depth, прогноз домінує.
+        # Gate A-depth: depth-robust Gate A. Split the residual into lateral
+        # (X, Y — the pixel projection YOLO gives correctly even under occlusion)
+        # and depth (Z — monocular f*D/w, which degrades as w collapses). Gate
+        # only the lateral part hard (hypot(dX,dY) <= max_assoc_residual) and,
+        # instead of rejecting a large depth innovation, strongly distrust it by
+        # inflating sigma_Z^2. Depth is then held by the prediction while X,Y
+        # update from the valid detection. Default False (A/B compatibility).
         self.enable_depth_robust_gate = bool(enable_depth_robust_gate)
         self.depth_hold_gain = float(depth_hold_gain)
-        # Мертва зона (Huber-style) для depth-distrust: демпфуємо лише
-        # НАДЛИШОК |innov| понад цей поріг нормальної фізики. excess =
-        # max(0, |innov| − depth_innov_free); σ_Z² += (gain·excess)².
-        # МОТИВАЦІЯ: чисте (gain·innov)² душило і легітимну глибину —
-        # на дальній стороні корту (rawZ природно шумить ±1.5-2 м →
-        # filtZ залипав занизько) та на подачі (innov −4.5 м → filtZ повз
-        # 12 кадрів замість швидкої збіжності). Мертва зона ~3 м пускає
-        # нормальну фізику без демпфування, а давить лише викиди оклюзії
-        # (innov 6-11 м). 0.0 = вимкнено (чисте квадратичне демпфування,
-        # A/B-сумісність). Рек. ~3.0 (= max_assoc_residual: «нормальний»
-        # фізичний крок).
+        # Huber-style dead zone for depth distrust: damp only the excess of
+        # |innov| over a normal-physics threshold. excess = max(0, |innov| -
+        # depth_innov_free); sigma_Z^2 += (gain*excess)^2. Pure (gain*innov)^2
+        # also damped legitimate depth (far side, serve); ~3 m dead zone passes
+        # normal physics and suppresses only occlusion outliers (6-11 m).
+        # 0.0 = disabled. Recommended ~3.0 (= max_assoc_residual).
         self.depth_innov_free = float(depth_innov_free)
-        # Coast Z-fence (2026-06-04): під час коасту немає вимірювання → жоден
-        # гейт не діє, а predict() екстраполює світову Z за контамінованою vz
-        # (біля межі кадру w_box обвалюється → Z=f·D/w роздувається → vz±19 м/с).
-        # На даних коаст ніс м'яч у Z=33-42 м (майданчик лише 18 м). Фенс у
-        # mark_missed кожного треку клампить Z прогнозу в [coast_z_min,
-        # coast_z_max] і гасить vz/az за фенсом. Default False (A/B-сумісність).
-        # Рек. coast_z_max≈21 (= back line 18 м + ~3 м на сервера за лінією),
-        # coast_z_min≈-3 (подача з-за ближньої лінії). Доповнює far-Z стелю
-        # детекції (--court_z_far_max) у run_segment: одна давить джерело
-        # (контамінований вимір), друга — екстраполяцію.
+        # Coast Z-fence: while coasting no gate acts and predict() extrapolates
+        # world Z from a contaminated vz (w_box collapses near the frame edge ->
+        # Z=f*D/w inflates -> vz up to +-19 m/s, Z carried to 33-42 m on an 18 m
+        # court). The fence in each track's mark_missed clamps predicted Z to
+        # [coast_z_min, coast_z_max] and damps vz/az. Default False. Recommended
+        # coast_z_max~21 (back line 18 m + ~3 m for servers), coast_z_min~-3.
         self.enable_coast_z_fence = bool(enable_coast_z_fence)
         self.coast_z_min = float(coast_z_min)
         self.coast_z_max = float(coast_z_max)
-        # Дефект 1: привид-треки. Tentative-трек, що не дійшов до min_hits,
-        # не повинен коастити як повноцінний — 1-2 шумові детекції інакше
-        # породжують ~80-кадрову фікцію (tid3/5/7: 0 confirmed, 99% coast,
-        # під підлогою). Вбиваємо Tentative після цього к-ва коаст-кадрів.
+        # Defect 1: ghost tracks. A Tentative track that never reached min_hits
+        # must not coast as a full track — 1-2 noise detections otherwise draw
+        # an ~80-frame fiction. Kill Tentative tracks after this many coast frames.
         self.tentative_max_age = int(tentative_max_age)
-        # Дефект 2: підпідлоговий коаст. М'яч у польоті не може бути нижче
-        # підлоги; якщо трек НА КОАСТІ екстраполює y < floor_kill_y —
-        # екстраполяція стала фікцією (tid2 пірнав до −5.6 м), термінуємо.
-        # Невеликий від'ємний запас проти шуму біля підлоги (м'яч r≈0.1 м).
+        # Defect 2: sub-floor coasting. A ball in flight cannot be below the
+        # floor; if a coasting track extrapolates y < floor_kill_y, terminate it.
+        # Small negative margin against floor noise (ball r ~0.1 m).
         self.floor_kill_y = float(floor_kill_y)
-        # Phase F: адаптивний σ_Z. Якщо True й у update() передано
-        # detection_covs — гейтинг і IMM-апдейт використовують per-detection
-        # 3×3 R (анізотропний, витягнутий уздовж променя; σ_Zc = f·D/w²·σ_w),
-        # а не фіксований self.R_matrix. Чесна довіра до глибини залежно від
-        # ширини bbox. Default False (A/B-сумісність).
+        # Adaptive sigma_Z. If True and detection_covs is passed to update(),
+        # gating and the IMM update use per-detection 3x3 R (anisotropic, along
+        # the ray; sigma_Zc = f*D/w^2 * sigma_w) instead of the fixed
+        # self.R_matrix. Default False (A/B compatibility).
         self.enable_adaptive_depth_R = bool(enable_adaptive_depth_R)
-        # IMM-тригери (Phase F експеримент): прокидаються у кожен Track при
-        # створенні → get_dynamic_transition_matrix. Дозволяють тюнити
-        # активацію bounce/hit-режимів з CLI без правок коду. Дефолти =
-        # сигнатура get_dynamic_transition_matrix (A/B-сумісність).
+        # IMM triggers, forwarded to every Track -> get_dynamic_transition_matrix.
+        # Allow tuning bounce/hit activation from the CLI. Defaults match the
+        # function signature (A/B compatibility).
         self.hit_residual_min_sq = float(hit_residual_min_sq)
         self.hit_residual_max_sq = float(hit_residual_max_sq)
         self.bounce_height_max = float(bounce_height_max)
         self.bounce_max_coast = int(bounce_max_coast)
         self.m_hit_target = (None if m_hit_target is None
                              else np.asarray(m_hit_target, dtype=float))
-        # Gate B: merge-identity guard. Два Confirmed-треки успадковують
-        # спільний id лише якщо фізично примиренні (той самий м'яч,
-        # роздроблений маневром: ≤ цієї відстані). Далекий FP-трек, що
-        # дожив до Confirmed, НЕ донорить id реальному коастуючому треку
-        # (інакше merge-identity амплифікувала б телепорт). Маневр-фрагменти
-        # ≤~2 м, FP-телепорти ≥6 м → 4.0 м чисто розділяє.
-        self.SINGLE_BALL_MERGE_MAX_DIST = 4.0
-        # Phase C: коастинг ≤ цієї к-сті кадрів не коштує ідентичності
-        # (bucket'имо tsu). tol=1: реальний трек переживає ОДИН пропущений
-        # кадр (детекційний шум), але після 2+ кадрів коастингу поступається
-        # треку, що активно отримує детекції. Маленький tol важливий: під
-        # час маневру програшний трек коастить по старій траєкторії й
-        # ВІДХОДИТЬ від м'яча — чим раніше перемкнутись на детектований
-        # трек, тим менший просторовий стрибок на switch'і.
-        self.SINGLE_BALL_NMS_TSU_TOL = 1
+        # Gate B: merge-identity guard. Two Confirmed tracks inherit a shared id
+        # only if physically reconcilable (same ball split by a manoeuvre, within
+        # this distance). A distant FP track that reached Confirmed does not
+        # donate its id to the real coasting track (that would amplify teleports).
+        # Manoeuvre fragments stay <=~2 m, FP teleports >=6 m, so 4.0 m separates.
+        self.single_ball_merge_max_dist = 4.0
+        # Coasting <= this many frames does not cost identity (we bucket tsu).
+        # tol=1: a real track survives one missed frame (detection noise) but
+        # after 2+ coast frames yields to an actively-detected track. A small tol
+        # minimises the spatial jump at a switch.
+        self.single_ball_nms_tsu_tol = 1
 
         self.tracks = []
         self.next_id = 1
-        # Матриця для гейтингу Махаланобіса. Узгоджуємо з R_init у
-        # create_imm_estimator (σ_z ≈ 0.7 м для моно-камерної глибини).
+        # Matrix for Mahalanobis gating, consistent with R_init in
+        # create_imm_estimator (sigma_z ~ 0.7 m for monocular depth).
         self.R_matrix = np.diag([0.02, 0.02, 0.5])
 
-        # Ring-буфер невідповідних (unassigned) детекцій з кількох останніх
-        # кадрів. Використовується для bootstrap'у швидкості при створенні
-        # нового треку: якщо поточна незасоційована детекція близька до
-        # детекції з останніх N кадрів, ініціалізуємо новий трек з
-        # v = (z_now − z_prev) / (Δfr · dt) замість нулів.
-        self._spawn_buffer = []  # елементи: (np.array z, int frame_idx)
+        # Ring buffer of unassigned detections from the last few frames. Used to
+        # bootstrap velocity when spawning a new track: if the current
+        # unassigned detection is close to one from the last N frames, init the
+        # track with v = (z_now - z_prev)/(dframe*dt) instead of zeros.
+        self._spawn_buffer = []  # elements: (np.array z, int frame_idx)
         self._frame_counter = 0
 
     def update(self, detections_3d, detection_covs=None):
         """
-        detections_3d: список масивів np.array([x, y, z]) для
-        всіх знайдених об'єктів у кадрі
-        detection_covs: опційний паралельний список 3×3 коваріацій
-            вимірювання (по одній на детекцію). Вживається лише якщо
-            enable_adaptive_depth_R=True. None → фіксований self.R_matrix.
+        detections_3d: list of np.array([x, y, z]) for all detected objects
+            in the frame.
+        detection_covs: optional parallel list of 3x3 measurement covariances
+            (one per detection). Used only if enable_adaptive_depth_R=True;
+            None -> fixed self.R_matrix.
         """
         self._frame_counter += 1
 
         def _R_for(d_idx):
-            """R для d-ї детекції: адаптивна, якщо ввімкнено й надано."""
+            """R for detection d: adaptive if enabled and provided."""
             if (self.enable_adaptive_depth_R
                     and detection_covs is not None
                     and detection_covs[d_idx] is not None):
@@ -826,14 +631,13 @@ class IMMTracker:
             return self.R_matrix
 
         def _depth_robust_R(track, z, R_base):
-            """Роздуваємо σ_Z² пропорційно квадрату інновації глибини, щоб
-            великий стрибок глибини майже не зсував фільтр (трек тримає
-            глибину прогнозом, латераль X,Y оновлює з валідної детекції).
-            z_pred беремо з x_prior (predict уже викликано для всіх треків)."""
+            """Inflate sigma_Z^2 proportional to the squared depth innovation so
+            a large depth jump barely moves the filter (depth held by the
+            prediction, X,Y updated from the valid detection). z_pred from
+            x_prior (predict already ran for all tracks)."""
             z_pred = np.dot(track.h_matrix, track.imm.x_prior)
             depth_innov = float(z[2] - z_pred[2])
-            # Мертва зона: душимо лише надлишок |innov| понад поріг
-            # нормальної фізики, щоб не калічити легітимну глибину.
+            # Dead zone: damp only the excess of |innov| over normal physics.
             excess = max(0.0, abs(depth_innov) - self.depth_innov_free)
             R_eff = np.array(R_base, dtype=float, copy=True)
             R_eff[2, 2] += (self.depth_hold_gain * excess) ** 2
@@ -850,8 +654,8 @@ class IMMTracker:
             return
 
         if len(self.tracks) == 0:
-            # Особливий випадок: треків ще немає. Будь-яка детекція має
-            # шанс на bootstrap, якщо у spawn-буфері є попередник.
+            # No tracks yet. Any detection may bootstrap if the spawn buffer has
+            # a predecessor.
             for z in detections_3d:
                 self._spawn_track_from_unmatched(z)
             self._age_spawn_buffer()
@@ -860,21 +664,20 @@ class IMMTracker:
         cost_matrix = np.full((len(self.tracks), len(detections_3d)), 1e5)
 
         for t, track in enumerate(self.tracks):
-            # Gate A: прогнозована позиція треку (h·x_prior) — точка відліку
-            # для коваріаційно-незалежного residual-стелажу.
+            # Gate A reference point: the track's predicted position h*x_prior.
             z_pred = np.dot(track.h_matrix, track.imm.x_prior)
             for d, z in enumerate(detections_3d):
                 R_d = _R_for(d)
-                # Gate A: відкидаємо пару, якщо евклідів стрибок від прогнозу
-                # фізично неможливий за один крок асоціації — НЕЗАЛЕЖНО від
-                # того, наскільки роздулась P під час коастингу (саме це
-                # відкривало Mahalanobis-гейт для телепортів fr763/807/86).
+                # Gate A: reject a pair whose Euclidean jump from the prediction
+                # is physically impossible in one step, independent of how much P
+                # inflated while coasting (that is what opened the Mahalanobis
+                # gate for teleports).
                 if self.enable_physical_gate:
                     if self.enable_depth_robust_gate:
-                        # Gate A-depth: гейтимо ЛИШЕ латераль (X,Y). Велику
-                        # інновацію глибини не відкидаємо — нею керує
-                        # depth-distrust (роздутий σ_Z і в гейтингу, і на
-                        # update). Так детекція з валідним u,v приймається.
+                        # Gate A-depth: gate only the lateral (X,Y) part. The
+                        # large depth innovation is not rejected but handled by
+                        # depth distrust (inflated sigma_Z in gating and update),
+                        # so a detection with valid u,v is accepted.
                         lateral = float(np.hypot(z[0] - z_pred[0],
                                                  z[1] - z_pred[1]))
                         if lateral > self.max_assoc_residual:
@@ -886,41 +689,39 @@ class IMMTracker:
                 if dist_sq < self.gating_threshold:
                     cost_matrix[t, d] = dist_sq
 
-        # 3. Асоціація (Угорський алгоритм)
+        # Association (Hungarian algorithm).
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
         unmatched_tracks = set(range(len(self.tracks)))
         unmatched_detections = set(range(len(detections_3d)))
 
-        # 4. Оновлення знайдених пар
+        # Update matched pairs.
         for r, c in zip(row_ind, col_ind):
             if cost_matrix[r, c] < self.gating_threshold:
-                # Зберігаємо Mahalanobis^2 НА МОМЕНТ accept'у — він піде
-                # у get_dynamic_transition_matrix наступного predict().
+                # Save Mahalanobis^2 at accept time; it feeds
+                # get_dynamic_transition_matrix on the next predict().
                 self.tracks[r]._last_mahalanobis_sq = float(
                     cost_matrix[r, c]
                 )
                 R_c = _R_for(c)
                 if self.enable_depth_robust_gate:
-                    # Та сама роздута σ_Z, що й у гейтингу: депт тримається
-                    # прогнозом, латераль X,Y оновлюється з детекції.
+                    # Same inflated sigma_Z as in gating: depth held by the
+                    # prediction, X,Y updated from the detection.
                     R_c = _depth_robust_R(self.tracks[r],
                                           detections_3d[c], R_c)
                 self.tracks[r].update(detections_3d[c], R=R_c)
                 unmatched_tracks.remove(r)
                 unmatched_detections.remove(c)
 
-        # 5. Обробка пропущених треків
+        # Missed tracks.
         for t in unmatched_tracks:
             self.tracks[t].mark_missed()
 
-        # 6. Створення нових треків для нерозпізнаних детекцій
-        #    (із bootstrap'ом швидкості, якщо знайдено попередника).
-        # Gate D: якщо реальний Confirmed-трек ЩОЙНО коастить коротко
-        # (0 < tsu ≤ spawn_suppress_max_coast), не народжуємо конкурента з
-        # викидних детекцій — нехай реальний трек ре-захопить м'яч. Викид НЕ
-        # потрапляє і в spawn-буфер → пізніший легітимний спавн стартує з
-        # нульовою швидкістю (без паразитного vz-bootstrap).
+        # Spawn new tracks for unmatched detections (with velocity bootstrap if a
+        # predecessor is found). Gate D: if a real Confirmed track is briefly
+        # coasting (0 < tsu <= spawn_suppress_max_coast), do not spawn a
+        # competitor from outlier detections — and keep the outlier out of the
+        # spawn buffer so a later legitimate spawn starts with zero velocity.
         suppress_spawn = (
             self.spawn_suppress_max_coast > 0
             and any(
@@ -933,24 +734,20 @@ class IMMTracker:
             for d in unmatched_detections:
                 self._spawn_track_from_unmatched(detections_3d[d])
 
-        # 7. Старіння spawn-буфера + видалення старих треків
+        # Age the spawn buffer and remove stale tracks.
         self._age_spawn_buffer()
         self._manage_lifecycle()
 
     # ------------------------------------------------------------------
-    # Допоміжні методи bootstrap'у початкової швидкості
+    # Initial-velocity bootstrap helpers
     # ------------------------------------------------------------------
     def _spawn_track_from_unmatched(self, z_now):
-        """
-        Створює новий Track для незасоційованої детекції z_now. Якщо у
-        spawn-буфері є точка-попередник, що задовольняє обмеженням
-        (близько у просторі, недавно у часі, узгоджена швидкість) —
-        ініціалізує трек з v_initial = (z_now − z_prev)/(Δfr · dt) та
-        hits=2; інакше — звичайна ініціалізація з нулевою швидкістю.
-        Spawn-точка, яку використано для bootstrap'у, видаляється з
-        буфера (один-до-одного), щоб уникнути «склейки» двох треків з
-        однієї історичної детекції.
-        """
+        """Create a new Track for the unassigned detection z_now. If the spawn
+        buffer holds a predecessor that satisfies the constraints (close in
+        space, recent in time, consistent velocity), init the track with
+        v_initial = (z_now - z_prev)/(dframe*dt) and hits=2; otherwise a plain
+        zero-velocity init. The used spawn point is removed (one-to-one) to avoid
+        gluing two tracks to the same historical detection."""
         z_now_arr = np.asarray(z_now, dtype=float)
         best_idx = -1
         best_dist = self.bootstrap_max_dist
@@ -970,7 +767,7 @@ class IMMTracker:
             v_cand = (z_now_arr - z_prev) / gap_dt
             speed = float(np.linalg.norm(v_cand))
             if speed > self.bootstrap_max_speed:
-                # Швидкість за межами фізично можливої — не bootstrap'имо.
+                # Velocity beyond physically possible -> no bootstrap.
                 continue
             best_idx = i
             best_dist = d_xyz
@@ -978,7 +775,7 @@ class IMMTracker:
             best_gap = gap
 
         if best_idx >= 0:
-            # Bootstrap! Створюємо трек з ненульовою v та hits=2.
+            # Bootstrap: create a track with non-zero v and hits=2.
             self.tracks.append(
                 Track(self.next_id, z_now_arr, self.dt,
                       v_initial=best_v, initial_hits=2,
@@ -996,11 +793,11 @@ class IMMTracker:
                       m_hit_target=self.m_hit_target)
             )
             self.next_id += 1
-            # Видаляємо використану spawn-точку.
+            # Remove the used spawn point.
             del self._spawn_buffer[best_idx]
         else:
-            # Класичний spawn з нульовою швидкістю + кладемо детекцію
-            # у буфер для майбутнього bootstrap'у.
+            # Plain zero-velocity spawn + buffer the detection for a future
+            # bootstrap.
             self.tracks.append(
                 Track(self.next_id, z_now_arr, self.dt,
                       min_hits=self.min_hits,
@@ -1022,7 +819,7 @@ class IMMTracker:
             )
 
     def _age_spawn_buffer(self):
-        """Видаляє з буфера записи, старші за bootstrap_max_gap_frames."""
+        """Drop buffer entries older than bootstrap_max_gap_frames."""
         cutoff = self._frame_counter - self.bootstrap_max_gap_frames
         self._spawn_buffer = [
             (z, f) for (z, f) in self._spawn_buffer if f > cutoff
@@ -1031,24 +828,24 @@ class IMMTracker:
     def _manage_lifecycle(self):
         active_tracks = []
         for track in self.tracks:
-            # Видаляємо трек, якщо він довго не оновлювався
+            # Delete a track that has not updated for too long.
             if track.time_since_update > self.max_age:
                 track.state = 'Deleted'
 
-            # Дефект 1: привид-трек. Tentative (так і не підтвердився), а вже
-            # коастить понад tentative_max_age кадрів → шумовий спавн, який без
-            # цього малював би 80-кадрову фікцію. Підтверджені треки не зачеплені.
+            # Defect 1: ghost track. Tentative (never confirmed) but already
+            # coasting past tentative_max_age frames -> noise spawn. Confirmed
+            # tracks are untouched.
             elif (track.state == 'Tentative'
                   and track.time_since_update > self.tentative_max_age):
                 track.state = 'Deleted'
 
-            # Дефект 2: підпідлоговий коаст. Лише коли трек БЕЗ виміру (коаст):
-            # за наявності детекції y вимірюється й клампінг не потрібен.
+            # Defect 2: sub-floor coast. Only when the track has no measurement
+            # (coasting): with a detection y is measured and no clamp is needed.
             elif (track.time_since_update > 0
                   and track.imm.x[3] < self.floor_kill_y):
                 track.state = 'Deleted'
 
-            # Трек залишається, якщо він не видалений
+            # Keep the track unless deleted.
             if track.state != 'Deleted':
                 active_tracks.append(track)
 
@@ -1058,64 +855,47 @@ class IMMTracker:
             self._suppress_duplicate_confirmed()
 
     def _suppress_duplicate_confirmed(self):
-        """Phase C: single-ball NMS. Домен — один м'яч у грі, тож
-        одночасно має бути лише ОДИН Confirmed-трек. Якщо їх кілька
-        (фантом-дублі від сміттєвих спавнів або дивергентного коастингу),
-        лишаємо найкращий, решту ВИДАЛЯЄМО.
+        """Single-ball NMS. One ball in play -> at most one Confirmed track. If
+        several exist (phantom duplicates from noise spawns or divergent
+        coasting), keep the best and DELETE the rest.
 
-        Видалення (а не пониження до Tentative) — навмисне: понижений
-        дубль продовжує красти детекції в Угорському алгоритмі (на маневрі
-        детекція перескакує між двома треками, що тримають той самий м'яч),
-        re-confirm'иться і знову конкурує — дубль жив ~200 кадрів і давав
-        9-14 стрибків ідентичності. Видалення зупиняє це: детекція стабільно
-        йде на переможця; якщо ж переможець справді розходиться з м'ячем,
-        нова детекція спавнить свіжий трек (ціна — трохи вища fragmentation,
-        але траєкторія помітно гладша: jerk↓, switches 9→3).
+        Deletion (not demotion) is deliberate: a demoted duplicate keeps stealing
+        detections in the Hungarian step, re-confirms and competes again,
+        producing identity switches. Deletion sends detections to the winner; if
+        the winner truly diverges, a fresh detection spawns a new track (slightly
+        higher fragmentation, much smoother trajectory: jerk down, switches 9->3).
 
-        Найкращий = (min bucketed-tsu, max hits, min останній
-        Mahalanobis^2): активно оновлюваний > довгоживучий > добре
-        вписаний.
+        Best = (min bucketed-tsu, max hits, min last Mahalanobis^2): actively
+        updated > long-lived > well-fitted.
 
-        ВАЖЛИВО — bucketing tsu: короткий коастинг (tsu ≤ TSU_TOL)
-        прирівнюється до 0. Без цього один пропущений кадр на реальному
-        треку (tsu=1) віддавав би ідентичність дивергентному привиду з
-        tsu=0 — навіть якщо привид має 4 hits проти 245 у реального.
-        Це спричиняло мерехтіння ідентичності під час маневру (детекції
-        на 2-3 кадри перескакували на привид-трек). З bucket'ом реальний
-        трек (на порядок більше hits) тримає ідентичність крізь коротку
-        турбулентність; привид із ДОВГИМ коастингом (tsu > TSU_TOL) усе ж
-        поступається активному треку — коректний handoff."""
+        tsu bucketing: a short coast (tsu <= tsu_tol) counts as 0. Without it one
+        missed frame on a real track (tsu=1) would hand identity to a divergent
+        ghost with tsu=0, causing identity flicker during manoeuvres. With the
+        bucket the real track keeps identity through short turbulence; a ghost
+        with a LONG coast (tsu > tsu_tol) still yields to the active track."""
         confirmed = [t for t in self.tracks if t.state == 'Confirmed']
         if len(confirmed) < 2:
             return
 
         def _key(t):
-            eff_tsu = 0 if t.time_since_update <= self.SINGLE_BALL_NMS_TSU_TOL \
+            eff_tsu = 0 if t.time_since_update <= self.single_ball_nms_tsu_tol \
                 else t.time_since_update
             return (eff_tsu, -t.hits, t._last_mahalanobis_sq)
 
         confirmed.sort(key=_key)
         winner = confirmed[0]
 
-        # Merge-identity (фікс fragmentation): домен — один м'яч, тож усі
-        # співіснуючі Confirmed-треки = той САМИЙ фізичний м'яч, лише
-        # роздроблений маневром (детекція вистрибує з гейту → народжується
-        # конкурент). Переможець успадковує МІНІМАЛЬНИЙ id групи →
-        # логічна ідентичність неперервна через шов, а не новий id щоразу.
-        # Розділені реальним розривом траєкторії (різні розіграші) НІКОЛИ
-        # не співіснують як Confirmed (gap десятки кадрів) → сюди не
-        # потрапляють → хибного злиття немає. Переносимо й МАКС hits, щоб
-        # злитий трек лишався "досвідченим" і стабільним переможцем у
-        # наступних NMS (tiebreaker -hits).
+        # Merge-identity (fragmentation fix): one ball domain, so all coexisting
+        # Confirmed tracks are the same physical ball split by a manoeuvre. The
+        # winner inherits the minimum id of the group so logical identity is
+        # continuous across the seam. Tracks split by a real trajectory break
+        # (different rallies) never coexist as Confirmed, so no false merge.
+        # Carry the max hits too, so the merged track stays a stable NMS winner.
         #
-        # Gate B (merge guard): id успадковуємо ЛИШЕ від фізично примиренних
-        # членів групи (≤ SINGLE_BALL_MERGE_MAX_DIST від переможця). Далекий
-        # FP-трек, що дожив до Confirmed (пройшов min_hits-верифікацію), усе
-        # одно НЕ донорить свій id — інакше merge-identity легалізувала б
-        # телепорт (амплифікація проблеми fr763). Він просто видаляється
-        # як дубль. Маневр-фрагменти лишаються близько (≤~2 м) → зливаються
-        # нормально; реальний м'яч, що далеко "перестрибнув", дає новий id —
-        # коректно, бо такий стрибок = фактично новий сегмент гри.
+        # Gate B (merge guard): inherit an id only from physically reconcilable
+        # members (<= single_ball_merge_max_dist from the winner). A distant FP
+        # track that reached Confirmed does not donate its id (that would
+        # legalise a teleport); it is simply deleted as a duplicate.
         def _pos(t):
             x = t.imm.x_post
             return np.array([x[0], x[3], x[6]])
@@ -1123,7 +903,7 @@ class IMMTracker:
         wp = _pos(winner)
         reconcilable = [
             t for t in confirmed
-            if np.linalg.norm(_pos(t) - wp) <= self.SINGLE_BALL_MERGE_MAX_DIST
+            if np.linalg.norm(_pos(t) - wp) <= self.single_ball_merge_max_dist
         ]
         winner.track_id = min(t.track_id for t in reconcilable)
         winner.hits = max(t.hits for t in reconcilable)
@@ -1133,5 +913,5 @@ class IMMTracker:
         self.tracks = [t for t in self.tracks if t.state != 'Deleted']
 
     def get_confirmed_tracks(self):
-        """Повертає позиції лише тих треків, в яких ми впевнені"""
+        """Return only the tracks we are confident in (Confirmed state)."""
         return [t for t in self.tracks if t.state == 'Confirmed']

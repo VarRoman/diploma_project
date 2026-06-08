@@ -1,6 +1,6 @@
 \begin{center}
 \large{\MakeUppercase{\textbf{Анотація}}}
-\end{center}				
+\end{center}
 %\addcontentsline{toc}{chapter}{ВИСНОВКИ}	% Добавляем его в оглавление
 
 
@@ -10,60 +10,40 @@
 \newcommand{\contribution}{\textbf{Особистий вклад.}}
 \newcommand{\keyword}{\textbf{Ключові слова:}}
 
-\textbf{Об'єм і структура проєкту.} Проєкт складається з вступу, чотирьох розділів, висновків, переліку умовних
-скорочень та списку літератури.
+{\actuality} Роботу присвячено розробці програмно-алгоритмічного комплексу для автоматизованого відстеження
+волейбольного м'яча та розрахунку його кінематичних параметрів (швидкості, 3D-траєкторії) на основі монокулярного
+відеопотоку.
 
-{\actuality} Роботу присвячено розробці програмно-алгоритмічного комплексу для автоматизованого відстеження волейбольного
-м'яча та розрахунку його кінематичних параметрів(швидкості, 3D-траєкторії) на основі монокулярного відеопотоку.
+Систему побудовано на моделі глибокого навчання YOLO для детекції м'яча в умовах розмиття рухом. Перехід від піксельних
+координат до метричних реалізовано через модель камери-обскури з алгоритмом калібрування PnP та зворотним проектуванням.
+Для фільтрації шуму та компенсації аеродинамічних ефектів застосовано сигма-точковий фільтр Калмана, а для відстеження
+різких змін швидкості під час атакуючих ударів — архітектуру взаємодіючих множинних моделей.
 
-В процесі виконання роботи проаналізовано існуючі комерційні системи спортивної аналітики та виявлено потребу в
-доступних мобільних рішеннях.
-Розроблено архітектуру системи, що базується на моделі глибокого навчання YOLO для
-високоточної об'єктної детекції в умовах розмиття рухом.\ Для переходу від двовимірних піксельних
-координат до фізичних метричних величин імплементовано модель камери-обскури з використанням алгоритму просторового
-калібрування PnP та методу зворотного проектування.
+Експериментальне тестування підтвердило здатність системи реконструювати 3D-траєкторію та фіксувати пікову швидкість
+удару однією камерою стандартної частоти (50--60 FPS). Результати можуть використовуватися тренерськими штабами для
+тактико-технічного аналізу.
 
-Для вирішення проблеми високочастотного апаратного шуму та компенсації нелінійних аеродинамічних
-ефектів застосовано математичний апарат оптимальної фільтрації — сигма-точковий фільтр Калмана.
-З метою точного відстеження різких змін швидкості під час атакуючих ударів розроблено гібридну
-архітектуру на базі взаємодіючих множинних моделей.
+\keyword\ \textit{YOLO, калібрування PnP, зворотне проектування, сигма-точковий фільтр Калмана, взаємодіючі множинні
+    моделі, 3D-траєкторія, пікова швидкість удару.}
 
-Експериментальне тестування підтвердило здатність системи реконструювати тривимірну траєкторію та фіксувати пікову
-швидкість удару з використанням однієї камери стандартної частоти кадрів (50-60 FPS). Результати роботи можуть бути
-використані тренерськими штабами для тактико-технічного аналізу та оптимізації тренувального процесу у волейболі.
-
-%
-\keyword\ \textit{модель глибокого навчання YOLO, алгоритм просторового калібрування PnP, метод зворотного проектування,
-    нелінійні аеродинамічні ефекти, сигма-точковий фільтр Калмана, взаємодіючі множинні моделі, тривімірна
-    траєкторія, пікова швидкість удару.}
-
-
-\newpage
+\bigskip
 
 \begin{center}
 \large{\MakeUppercase{\textbf{Annotation}}}
 \end{center}
 
-The thesis is devoted to the development of a software and algorithmic complex for automated volleyball tracking and
-calculation of its kinematic parameters (speed, 3D trajectory) based on a monocular video stream.
+The thesis presents a software and algorithmic complex for automated volleyball tracking and calculation of its
+kinematic parameters (speed, 3D trajectory) from a monocular video stream.
 
-During the research, existing commercial sports analytics systems were analyzed, revealing a strong demand for
-accessible mobile solutions.\ The system architecture is based on the YOLO deep learning model for high-precision object
-detection under severe motion blur conditions.\ To transition from 2D pixel coordinates to physical metric values, a
-pinhole camera model was implemented using the Perspective-n-Point(PnP) spatial calibration algorithm and Ray Casting
-method.
+The system is based on the YOLO deep learning model for ball detection under motion blur. The transition from pixel to
+metric coordinates uses a pinhole camera model with PnP calibration and Ray Casting. To filter noise and compensate for
+aerodynamic effects, an Unscented Kalman Filter is applied, while abrupt speed changes during attacking strikes are
+tracked with an Interacting Multiple Models architecture.
 
-To solve the problem of high-frequency hardware noise and compensate for nonlinear aerodynamic
-effects, the mathematical apparatus of optimal filtering was applied, specifically the Unscented Kalman Filter.
-In order to accurately track abrupt speed changes during spikes, a hybrid architecture based on Interacting Multiple
-Models was designed.
+Experimental testing confirmed the system's ability to reconstruct the 3D trajectory and capture peak strike speed using
+a single standard frame-rate camera (50--60 FPS).
 
-Experimental testing confirmed the system's ability to reconstruct the 3D trajectory and capture the peak spike speed
-using a single standard frame rate camera (50-60 FPS). The results of the work can be utilized by coaching staffs for
-tactical and technical analysis and the optimization of the training process in volleyball.
-
-\textbf{Keywords:} \textit{YOLO deep learning model, PnP spatial calibration algorithm, Ray Casting
-    method, nonlinear aerodynamic effects, Unscented Kalman Filter, Interacting Multiple Models three-dimensional,
-    trajectory, peak impact velocity.}
+\textbf{Keywords:} \textit{YOLO, PnP calibration, Ray Casting, Unscented Kalman Filter, Interacting Multiple Models,
+    3D trajectory, peak strike speed.}
 
 \newpage

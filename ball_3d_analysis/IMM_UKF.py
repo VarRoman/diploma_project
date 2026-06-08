@@ -642,14 +642,9 @@ def fx_ballistic(x, dt):
 
 
 def fx_hit(x, dt):
-    """
-    9D hit model: structurally identical to fx_ballistic (CA with gravity and
-    drag). The difference is in the Q matrix (create_imm_estimator): the hit
-    mode has a much larger Q[a], which lets the acceleration "wake up" from ~0
-    to impulsive values within a frame or two. A hit/block is thus remembered
-    as a non-zero acceleration in the state, instead of the random velocity
-    drift caused by a large Q[v] in the old 6D version.
-    """
+    """9D hit model: identical dynamics to fx_ballistic. The hit mode differs
+    only in a much larger Q[a] (set in create_imm_estimator), which lets the
+    acceleration wake from ~0 to impulsive values within a frame or two."""
     return fx_ballistic(x, dt)
 
 
@@ -714,32 +709,16 @@ def get_dynamic_transition_matrix(y, vy,
                                   frames_since_update=0,
                                   bounce_max_coast=3,
                                   m_hit_target=None):
-    """
-    Return the 3x3 IMM Markov transition matrix for the models
-    [Ballistic, Hit, Bounce] for the next prediction step.
+    """Return the 3x3 IMM Markov transition matrix for [ballistic, hit, bounce]
+    for the next prediction step. The base matrix sticks to ballistic
+    (M[0,0]=0.95); two triggers steer it: a passive geometric bounce trigger and
+    a residual-based mid-air hit trigger interpolated over
+    [hit_residual_min_sq, hit_residual_max_sq] (the chi^2_3 95th percentile to
+    the gating bound), clamped outside that range.
 
-    The base matrix sticks to Ballistic (M[0,0]=0.95): without external
-    triggers the ball keeps following a ballistic trajectory.
-
-    Triggers:
-
-    1) Bounce — a passive geometric trigger.
-
-    2) Mid-air hit — a residual-based trigger.
-
-       Parameters:
-
-       - hit_residual_min_sq=8.0:   ~95th percentile of chi^2_3;
-       - hit_residual_max_sq=11.34: upper bound = gating threshold.
-
-       Outside [min, max] the interpolation is clamped (0 below, 1 above).
-
-    :param y:   ball vertical coordinate in world frame (m).
-    :param vy:  vertical velocity (m/s).
-    :param mahalanobis_sq: squared Mahalanobis distance of the last accepted
-        detection against the IMM prediction (0 for tracks without updates).
-    :param hit_residual_min_sq, hit_residual_max_sq: activation range of the
-        hit trigger (squared values matching the chi^2_3 distribution).
+    y, vy: ball vertical position (m) and velocity (m/s) in world frame.
+    mahalanobis_sq: squared Mahalanobis distance of the last accepted detection
+        (0 for tracks without updates).
     """
     M = np.array([[0.95, 0.04, 0.01],
                   [0.60, 0.40, 0.00],
@@ -748,7 +727,8 @@ def get_dynamic_transition_matrix(y, vy,
     if frames_since_update > bounce_max_coast:
         return np.eye(3)
 
-    if y < bounce_height_max and vy < 0 and frames_since_update <= bounce_max_coast:
+    if (y < bounce_height_max and vy < 0 and frames_since_update
+            <= bounce_max_coast):
         M[0] = [0.10, 0.05, 0.85]
         M[1] = [0.10, 0.05, 0.85]
         return M

@@ -57,7 +57,8 @@
         \ESKD@hash@next@value{@style@draw@\ESKD@thisstyle}\relax
       \repeat
       \global\let\ESKD@thisstyle\@empty%
-    \end{picture}}
+    \end{picture}
+    }
 }
 
 \RequirePackage{fancyhdr}
@@ -109,7 +110,7 @@
       \line(1,0){\ESKDltu{\ESKDframeW}}}
     \end{picture}}}
 
-\newcommand{\ESKDfontTabBase}{\gostfont\fontsize{12pt}{14pt}\selectfont\slshape}
+\newcommand{\ESKDfontTabBase}{\gostfont\fontsize{11pt}{14pt}\selectfont\slshape}
 %\newcommand{\ESKDfontTabBase}{\fontsize{14pt}{16pt}\selectfont}
 \renewcommand{\ESKDfontTabHead}{\ESKDfontTabBase}
 \renewcommand{\ESKDfontTabBody}{\ESKDfontTabBase}
@@ -142,9 +143,7 @@
 
 \begin{document}
 \begin{ESKDspecification}
-%\bgroup
-\def\arraystretch{1.2}%  1 is the default, change whatever you need
-%\rule{0pt}{12mm}
+\def\arraystretch{1.2}
 \begin{tabular}{@{} >{\centering}m{0.1cm}@{}>{\centering}p{1.1cm}>{\centering}m{4.5cm}>{\centering}m{5.7cm}>{\centering}m{1.8cm}>{\centering}m{2.2cm}>{\centering}m{2cm}}
 
 \multicolumn{1}{c}{\multirow{-1.4}{*}{\centering \begin{sideways} \;Довідки\end{sideways}}}& \multicolumn{1}{c}{\multirow{-1.4}{*}{\centering \begin{sideways}Формат\end{sideways}}} & \multicolumn{1}{c}{\multirow{-1}{*}{\centering Позначення}}  & \multicolumn{1}{c}{\multirow{-1}{*}{\centering Найменування}} & \multicolumn{1}{c}{\multirow{-2}{*}{\centering Кільк.}} & \multicolumn{1}{c}{\multirow{-2}{*}{\centering №}} & \multicolumn{1}{c}{\multirow{-1}{*}{\centering Додаток}} \tabularnewline
@@ -156,35 +155,34 @@
 
 %----- Опис альбому -----%
 \rule{0pt}{20mm}
-\point  & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\OAid\ \OA}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering 1}} &  & \tabularnewline
- & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \OAtranscript}} & & & \tabularnewline
+\point  & \multicolumn{1}{c}{\multirow{-1.7}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.7}{*}{\theStampCode.\OAid\ \OA}}    & \multicolumn{1}{c}{\multirow{-1.3}{160pt}{\centering \MakeUppercase\thesisTitle}} & \multicolumn{1}{c}{\multirow{-1.7}{*}{\centering 1}} &  & \tabularnewline
+ & & & \multicolumn{1}{c}{\multirow{-1}{*}{\centering \OAtranscript}} & & & \tabularnewline
 
 %----- Технічне завдання -----%
 \rule{0pt}{10mm}
-\point  & \multicolumn{1}{c}{\multirow{-2}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\TZid\ \TZ}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering 5}} &  & \tabularnewline
- & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \TZtranscript}} & & & \tabularnewline
+\point  & \multicolumn{1}{c}{\multirow{-0.6}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-0.6}{*}{\theStampCode.\TZid\ \TZ}}    & \multicolumn{1}{c}{\multirow{-0.6}{*}{\centering \TZtranscript}} & \multicolumn{1}{c}{\multirow{-0.6}{*}{\centering 5}} &  & \tabularnewline
 
  %----- Пояснювальна записка -----%
 \rule{0pt}{12mm}
-\point  & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\PZid\ \PZ}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering 97}} &  & \tabularnewline
- & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \PZtranscript}} & & & \tabularnewline
+\point  & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.5}{*}{\theStampCode.\PZid\ \PZ}}    & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \PZtranscript}} & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering 94}} &  & \tabularnewline
 
-%----- Структурна схема -----%
+%----- Схема структурна (Д1) -----%
 \rule{0pt}{12mm}
-\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\SSid\ \SSh}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering 1}} &  & \tabularnewline
- & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \SStranscript}} & & & \tabularnewline
+\point  & \multicolumn{1}{c}{\multirow{-2.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-2.8}{*}{\theStampCode.\SSid\ \SSh}}    & \multicolumn{1}{c}{\multirow{-2.8}{*}{\centering \SStranscript}} & \multicolumn{1}{c}{\multirow{-2.8}{*}{\centering 1}} &  & \tabularnewline
 
-%----- Функціональна схема -----%
+%----- Схема функціональна (Д2) -----%
 \rule{0pt}{12mm}
-\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\FSid\ \FS}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering 1}} &  & \tabularnewline
- & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \FStranscript}} & & & \tabularnewline
+\point  & \multicolumn{1}{c}{\multirow{-4.2}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-4.2}{*}{\theStampCode.\FSid\ \FS}}    & \multicolumn{1}{c}{\multirow{-4.2}{*}{\centering \FStranscript}} & \multicolumn{1}{c}{\multirow{-4.2}{*}{\centering 1}} &  & \tabularnewline
 
-%----- Схема алгоритму -----%
+%----- Схема алгоритму (Д3) -----%
 \rule{0pt}{12mm}
-\point  & \multicolumn{1}{c}{\multirow{-1.8}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-1.8}{*}{\theStampCode.\PSid\ \PS}}    & \MakeUppercase\thesisTitle & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering 1}} &  & \tabularnewline
- & & & \multicolumn{1}{c}{\multirow{-1.5}{*}{\centering \PStranscript}} & & & \tabularnewline
+\point  & \multicolumn{1}{c}{\multirow{-5.5}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-5.5}{*}{\theStampCode.\PSid\ \PS}}    & \multicolumn{1}{c}{\multirow{-5.5}{*}{\centering \PStranscript}} & \multicolumn{1}{c}{\multirow{-5.5}{*}{\centering 1}} &  & \tabularnewline
+
+%----- Текст програми (Д4) -----%
+\rule{0pt}{10mm}
+\point  & \multicolumn{1}{c}{\multirow{-6.7}{*}{\centering A4}} &   \multicolumn{1}{c}{\multirow{-6.7}{*}{\theStampCode.\TPid\ \TP}}    & \multicolumn{1}{c}{\multirow{-6.7}{*}{\centering \TPtranscript}} & \multicolumn{1}{c}{\multirow{-6.7}{*}{\centering 68}} &  & \tabularnewline
 \end{tabular}
-% \egroup
+
 \end{ESKDspecification}
 
 \end{document}

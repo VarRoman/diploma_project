@@ -107,41 +107,21 @@ def get_3d_position(u, v, bbox_w, K, R_matrix, camera_pos,
 def get_3d_position_with_cov(u, v, bbox_w, K, R_matrix, camera_pos,
     ball_diameter=0.21, sigma_w=1.0, sigma_uv=1.0, r_floor=0.02,
     z_min=2.0, z_max=25.0, return_none_on_clip=False):
-    """
-    Like get_3d_position, but also returns a 3x3 measurement covariance R in
-    world coordinates — anisotropic and physically consistent with the
-    monocular depth geometry.
+    """Like get_3d_position, but also returns a 3x3 world-frame measurement
+    covariance R, anisotropic and consistent with monocular depth geometry.
 
-    Depth along the ray is Z_c = f*D / w_box, so its error is driven by the
-    bbox-width error sigma_w through linearisation:
-
-        sigma_Zc = |dZ_c/dw| * sigma_w = (f*D / w_box^2) * sigma_w.
-
-    sigma_Zc grows with f and with 1/w^2 — i.e. depth deserves less trust for
-    a larger (correct) focal length and for smaller (distant) balls. This is
-    the honest replacement for a fixed R_z = 0.5.
-
-    The uncertainty lies along the ray (direction d_world), not along the world
-    Z axis, so the world covariance is mostly a rank-1 ellipsoid stretched
-    along the ray:
-
-        Cov ~ sigma_Zc^2 * d_world*d_world^T     (dominant, depth)
-            + Z_c^2 * sigma_u^2 * J_u*J_u^T       (lateral, from pixel u)
-            + Z_c^2 * sigma_v^2 * J_v*J_v^T       (lateral, from pixel v)
-
-    with J_u = R^T*[1/f_x, 0, 0]^T, J_v = R^T*[0, 1/f_y, 0]^T — the shift of
-    the point per 1 px move of the bbox centre.
+    Depth error follows from Z_c = f*D / w_box linearised in the bbox width:
+        sigma_Zc = |dZ_c/dw| * sigma_w = (f*D / w_box^2) * sigma_w,
+    so depth is trusted less for distant (small-w) balls. The uncertainty lies
+    along the ray, giving a rank-1 ellipsoid plus lateral pixel terms:
+        Cov ~ sigma_Zc^2 * d*d^T + Z_c^2 * sigma_uv^2 * (J_u J_u^T + J_v J_v^T).
 
     Args:
-        sigma_w:  bbox-width sigma, in pixels (detector noise). Default 1.0.
-        sigma_uv: bbox-centre sigma in u,v, in pixels. Default 1.0.
-        r_floor:  isotropic variance floor (m^2) added to every axis.
-            Default 0.02, matching the lateral term of the old fixed
-            R = diag([0.02, 0.02, 0.5]). Keeps lateral trust from collapsing
-            below the proven value (monocular localises sideways very well, so
-            the rank-1 term leaves the lateral eigenvalues tiny) and guarantees
-            positive-definiteness. Only the along-ray depth stays adaptive
-            (sigma_Zc^2 on top of the floor).
+        sigma_w:  bbox-width sigma, px (detector noise). Default 1.0.
+        sigma_uv: bbox-centre sigma in u,v, px. Default 1.0.
+        r_floor:  isotropic variance floor (m^2) on every axis. Default 0.02
+            (lateral term of the old fixed R), keeping lateral trust stable and
+            R positive-definite; only the along-ray depth stays adaptive.
 
     Returns:
         (P_world (3,), R_cov (3,3)); or (None, None) on clip when
