@@ -18,4 +18,9 @@ sorting=none,
 
 \toggletrue{bbx:gostbibliography}
 
+% Розділювач кількох джерел у одному посиланні: кома замість крапки з комою,
+% тобто [1, 2] замість [1; 2] (вимога нормоконтролю, ДСТУ-формат посилань).
+\renewcommand*{\multicitedelim}{\addcomma\space}
+\renewcommand*{\compcitedelim}{\addcomma\space}
+
 \addbibresource{bibliography.bib}
