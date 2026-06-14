@@ -1,10 +1,7 @@
 %==============================================================================
-%  RoadVision — Sprawozdanie z projektu zespołowego
-%  Przedmiot: Projekt Zespołowy
-%  Uczelnia: Wyższa Szkoła Informatyki i Zarządzania w Rzeszowie (WSIiZ)
-%
-%  UWAGA: Strona tytułowa poniżej jest TYMCZASOWYM PLACEHOLDEREM.
-%         Należy ją zastąpić oficjalnym wzorem strony tytułowej WSIiZ.
+%  System przestrzennej analizy gry w siatkówkę z wykorzystaniem uczenia
+%  maszynowego — Sprawozdanie z realizacji projektu
+%  Strona tytułowa wzorowana na oficjalnym układzie WSIiZ.
 %==============================================================================
 \documentclass[14pt,a4paper]{extarticle}
 
@@ -24,60 +21,59 @@
 \usepackage{multirow}
 \usepackage{enumitem}
 \usepackage{float}
+\usepackage{amsmath}
 \usepackage{caption}
 \usepackage{listings}
 \usepackage{titlesec}
 \usepackage{fancyhdr}
 \usepackage{indentfirst}
 
-% Klasyczny wcięcie akapitowe (interlinia domyślna)
 \setlength{\parindent}{1.25cm}
 \setlength{\parskip}{0pt}
-\setlength{\emergencystretch}{3em}  % ogranicza wystawanie wierszy poza margines
+\setlength{\emergencystretch}{3em}
 
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit,
-                backgrounds, shadows.blur, decorations.pathreplacing, trees}
-\usepackage{pgfgantt}
-\usepackage{pgf-pie}
+                backgrounds, decorations.pathreplacing, trees}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
 
 \usepackage[hidelinks]{hyperref}
-
-% Polskie babel uaktywnia znak ", a my używamy „cudzysłowów” bezpośrednio.
 \shorthandoff{"}
 
-%-------------------------- Kolory marki RoadVision ---------------------------
-\definecolor{rvBlue}{HTML}{1F4E79}
-\definecolor{rvCyan}{HTML}{2E86AB}
-\definecolor{rvGreen}{HTML}{2E8B57}
-\definecolor{rvOrange}{HTML}{E07B39}
-\definecolor{rvRed}{HTML}{C0392B}
-\definecolor{rvGray}{HTML}{5D6D7E}
-\definecolor{rvLight}{HTML}{EAF2F8}
-\definecolor{rvLightGreen}{HTML}{E8F6EF}
-\definecolor{rvLightOrange}{HTML}{FCF3E8}
-\definecolor{rvHead}{HTML}{D9DDE1}   % formalna szarość — nagłówki tabel, elementy grupujące
+%-------------------------- Paleta stonowana (techniczna) --------------------
+% Świadomie powściągliwa, szaro-grafitowa kolorystyka — dokument techniczny.
+\definecolor{vbInk}{HTML}{2B3A48}    % grafit (główny)
+\definecolor{vbBlue}{HTML}{34495E}   % ciemny szary-niebieski
+\definecolor{vbCyan}{HTML}{5B6B7A}   % stalowy szary
+\definecolor{vbGreen}{HTML}{6B7480}  % szary (akcent neutralny)
+\definecolor{vbOrange}{HTML}{7A7368} % przygaszony grafit-beż
+\definecolor{vbRed}{HTML}{7A4A45}    % przygaszona czerwień (tylko sytuacje krytyczne)
+\definecolor{vbGray}{HTML}{5D6D7E}
+\definecolor{vbLight}{HTML}{EEF1F3}
+\definecolor{vbLightGreen}{HTML}{ECEEEA}
+\definecolor{vbLightOrange}{HTML}{F0EDE9}
+\definecolor{vbHead}{HTML}{DDE1E4}
 
-%-------------------------------- Nagłówki (czarne) ---------------------------
+%-------------------------------- Nagłówki -----------------------------------
 \titleformat{\section}{\color{black}\Large\bfseries}{\thesection.}{0.6em}{}
 \titleformat{\subsection}{\color{black}\large\bfseries}{\thesubsection.}{0.5em}{}
 \titleformat{\subsubsection}{\color{black}\normalsize\bfseries}{\thesubsubsection.}{0.5em}{}
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\color{rvGray}Projekt Zespołowy}
-\fancyhead[R]{\small\color{rvGray}WSIiZ}
+\fancyhead[L]{\small\color{vbGray}Analiza przestrzenna gry w siatkówkę}
+\fancyhead[R]{\small\color{vbGray}WSIiZ}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
-% Podpisy: wyśrodkowane, kursywa; etykieta pogrubiona, czarna
 \captionsetup{font={small,it}, labelfont={bf}, labelsep=period,
               justification=centering, singlelinecheck=true}
 
-%-------------------------------- Listingi ------------------------------------
-\definecolor{codebg}{HTML}{F7F9FB}
-\definecolor{codekw}{HTML}{1F4E79}
-\definecolor{codestr}{HTML}{2E8B57}
+%-------------------------------- Listingi -----------------------------------
+\definecolor{codebg}{HTML}{F7F8F9}
+\definecolor{codekw}{HTML}{34495E}
+\definecolor{codestr}{HTML}{5D6D7E}
 \definecolor{codecom}{HTML}{8C95A0}
 \lstdefinestyle{py}{
   language=Python,
@@ -86,36 +82,41 @@
   keywordstyle=\color{codekw}\bfseries,
   stringstyle=\color{codestr},
   commentstyle=\color{codecom}\itshape,
-  numbers=left, numberstyle=\tiny\color{rvGray}, numbersep=8pt,
-  frame=single, rulecolor=\color{rvLight},
+  numbers=left, numberstyle=\tiny\color{vbGray}, numbersep=8pt,
+  frame=single, rulecolor=\color{vbLight},
   breaklines=true, showstringspaces=false,
   tabsize=2, columns=fullflexible,
   literate={ą}{{\k a}}1 {ć}{{\'c}}1 {ę}{{\k e}}1 {ł}{{\l}}1 {ń}{{\'n}}1
            {ó}{{\'o}}1 {ś}{{\'s}}1 {ż}{{\.z}}1 {ź}{{\'z}}1
 }
 
-% Skróty do bloczków TikZ
-\tikzset{
-  rvnode/.style={rectangle, rounded corners=3pt, draw=rvBlue, line width=0.8pt,
-                 fill=rvLight, text=rvBlue, font=\small\bfseries, align=center,
-                 minimum width=2.4cm, minimum height=1cm, blur shadow={shadow blur steps=4}},
-  rvflow/.style={-{Stealth[length=2.5mm]}, line width=1pt, color=rvGray},
+\lstdefinestyle{sh}{
+  language=bash,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw},
+  commentstyle=\color{codecom}\itshape,
+  frame=single, rulecolor=\color{vbLight},
+  breaklines=true, showstringspaces=false,
+  columns=fullflexible, tabsize=2,
 }
 
-\newcommand{\rvchip}[2]{\tikz[baseline=-0.6ex]\node[fill=#1,text=white,rounded corners=2pt,
-   inner sep=2pt,font=\scriptsize\bfseries]{#2};}
+% Powściągliwe style bloków schematów — bez cieni, jednolite obrysy.
+\tikzset{
+  vbnode/.style={rectangle, rounded corners=2pt, draw=vbInk, line width=0.7pt,
+                 fill=vbLight, text=vbInk, font=\small, align=center,
+                 minimum width=2.4cm, minimum height=1cm},
+  vbflow/.style={-{Stealth[length=2.4mm]}, line width=0.8pt, color=vbGray},
+}
 
-% Placeholder na zrzut ekranu.
-%  Użycie:  \zrzut{nazwa_pliku.png}{wysokość}{opis czego dotyczy zrzut}
-%  Aby wstawić prawdziwy obraz, zastąp wywołanie poleceniem:
-%      \includegraphics[width=0.8\textwidth]{img/nazwa_pliku.png}
+% Placeholder na zrzut ekranu z działającego oprogramowania (overlay).
 \newcommand{\zrzut}[3]{%
   \setlength{\fboxsep}{0pt}%
-  \fcolorbox{rvGray}{rvHead!35}{%
+  \fcolorbox{vbGray}{vbHead!45}{%
     \begin{minipage}[c][#2][c]{0.8\textwidth}\centering
-      {\color{rvGray}\itshape [\,Miejsce na zrzut ekranu\,]}\\[6pt]
+      {\color{vbGray}\itshape [\,Miejsce na zrzut ekranu / klatkę overlay\,]}\\[6pt]
       {\color{black}\small #3}\\[6pt]
-      {\color{rvGray}\ttfamily\footnotesize \detokenize{img/#1}}
+      {\color{vbGray}\ttfamily\footnotesize \detokenize{img/#1}}
     \end{minipage}}}
 
 %==============================================================================
@@ -125,34 +126,34 @@
 \begin{titlepage}
 \centering
 \vspace*{0.6cm}
-\includegraphics[width=0.46\textwidth]{img/wsiiz_logo.png}\\[2.4cm]
+\includegraphics[width=0.46\textwidth]{img/wsiiz_logo.png}\\[2.2cm]
 
-{\Large Sprawozdanie z realizacji projektu}\\[2.2cm]
+{\Large Sprawozdanie z realizacji projektu}\\[2.0cm]
 
-{\LARGE\bfseries System monitorowania\\[0.2cm]
-jakości nawierzchni drogowej\\[0.2cm]
-w czasie rzeczywistym}\\[2.4cm]
-
-{\Large\scshape Projekt Zespołowy}\\[3.0cm]
+{\LARGE\bfseries System przestrzennej analizy\\[0.2cm]
+gry w siatkówkę z wykorzystaniem\\[0.2cm]
+uczenia maszynowego}\\[2.2cm]
 
 \vfill
 \noindent\begin{minipage}[t]{0.5\textwidth}
 \raggedright
 \textbf{Prowadzący:}\\[0.15cm]
-mgr inż. Aleksander Mysakowec
+dr inż. Leszek Gajecki
 \end{minipage}%
 \begin{minipage}[t]{0.5\textwidth}
 \raggedleft
-\textbf{Wykonawcy:}\\[0.15cm]
-Roman Bezshchasnyi, Grupa P1, 69930\\
-Rostysław Yaremko, Grupa P1, 69958
+\textbf{Wykonawca:}\\[0.15cm]
+Roman Bezshchasnyi, Grupa P1, 69930
 \end{minipage}\\[1.6cm]
 
 {\large Rzeszów 2026}
 \end{titlepage}
 
-%--------------------------------- SPIS TREŚCI --------------------------------
+%--------------------------------- SPIS TREŚCI -------------------------------
+{\small
+\setlength{\parskip}{0pt}
 \tableofcontents
+\par}
 \thispagestyle{fancy}
 \newpage
 
@@ -160,945 +161,737 @@ Rostysław Yaremko, Grupa P1, 69958
 \section{Wprowadzenie}
 %==============================================================================
 
-\subsection{Cel i geneza projektu}
-Stan nawierzchni dróg miejskich bezpośrednio wpływa na bezpieczeństwo uczestników
-ruchu, komfort jazdy oraz koszty eksploatacji pojazdów. Tradycyjna inwentaryzacja
-ubytków (dziur, wybojów, miejsc gwałtownego hamowania) prowadzona jest ręcznie,
-jest kosztowna i szybko traci aktualność. Celem projektu RoadVision było
-zaprojektowanie i zbudowanie działającego systemu, który automatycznie gromadzi
-dane z czujników pojazdu, w czasie rzeczywistym klasyfikuje stan nawierzchni i
-prezentuje wynik na interaktywnej mapie miasta.
+\subsection{Geneza i cel projektu}
+Współczesny sport profesjonalny coraz silniej opiera się na analizie danych. W~siatkówce —
+jednej z~najszybszych gier zespołowych na~świecie — prędkość piłki podczas ataku przekracza
+130~km/h, a~pojedyncze fazy gry trwają ułamki sekundy. W~takich warunkach klasyczna
+obserwacja „okiem trenera” oraz proste systemy dwuwymiarowej rejestracji wideo nie są już
+w~stanie dostarczyć obiektywnego, ilościowego materiału do~analizy taktyczno-technicznej.
+Automatyczne pozyskiwanie metryk kinematycznych — trójwymiarowej trajektorii lotu piłki,
+współrzędnych punktów odbicia, kątów ataku oraz prędkości szczytowej — pozwala obiektywnie
+oceniać skuteczność działań zawodników, modelować zachowanie przeciwnika i~optymalizować
+biomechanikę ruchów podczas treningu.
 
-System przygotowaliśmy jako rozwiązanie pilotażowe dla obszaru Rzeszowa, z
-możliwością łatwej rekonfiguracji na dowolny inny obszar — współrzędne mapy oraz
-źródło danych są zwykłymi parametrami konfiguracyjnymi.
+Istniejące rozwiązania komercyjne (np. Hawk-Eye czy Foxtenn) dostarczają takiej analizy,
+są jednak systemami zamkniętymi o~wysokim koszcie wdrożenia, wymagającymi instalacji
+od~10 do~20 zsynchronizowanych, szybkoklatkowych kamer przemysłowych rozmieszczonych
+wzdłuż całego obwodu hali. Czyni je to~praktycznie niedostępnymi dla~lig amatorskich,
+szkółek sportowych oraz klubów średniego szczebla. Powstaje zatem wyraźna potrzeba
+opracowania przystępnego, lokalnego i~architektonicznie elastycznego systemu wizji
+komputerowej, zdolnego do~trójwymiarowego śledzenia i~analizy parametrów gry na~podstawie
+ograniczonej liczby źródeł obrazu — aż do~pojedynczej kamery klasy konsumenckiej,
+np.~współczesnego smartfona.
 
-\subsection{Cel dokumentu}
-Sprawozdanie pełni dwie role. Po pierwsze, opisuje sposób, w jaki zorganizowaliśmy
-pracę dwuosobowego zespołu — przyjętą metodykę, podział prac (WBS), harmonogram,
-analizę ścieżki krytycznej, zarządzanie ryzykiem oraz kontrolę postępów. Po drugie,
-przedstawia rozwiązanie techniczne — architekturę, model danych, algorytmy oraz
-gotowy produkt. Zgodnie z charakterem przedmiotu Projekt Zespołowy najwięcej uwagi
-poświęciliśmy pierwszemu obszarowi.
+Celem projektu było zaprojektowanie i~zbudowanie działającego kompleksu
+programowo-algorytmicznego, który odtwarza trójwymiarową trajektorię piłki oraz wylicza
+jej parametry kinematyczne na~podstawie \emph{jednego} strumienia wideo. Zadanie to~leży
+na~styku trzech dziedzin: głębokiego uczenia (detekcja małego, szybkiego obiektu),
+geometrii rzutowej (kalibracja przestrzeni) oraz teorii optymalnej filtracji i~estymacji
+stanu (kompensacja szumów pomiaru). Jest to~celowo wybrany, ekonomicznie uzasadniony
+kompromis — rezygnacja z~kosztownej stereoskopii w~zamian za~konieczność rozwiązania
+trudnego problemu monokularnej rekonstrukcji głębi.
 
-\subsection{Zakres i założenia}
+\subsection{Cel i zakres dokumentu}
+Sprawozdanie przedstawia całość rozwiązania w~uporządkowanej formie: analizę dziedziny
+i~przegląd metod, sformułowanie wymagań, architekturę potoku przetwarzania, kluczowe
+modele matematyczne wraz z~ich najważniejszymi zależnościami oraz wyniki weryfikacji
+eksperymentalnej. Świadomie ograniczono liczbę pełnych wyprowadzeń matematycznych —
+przytoczono jedynie te zależności, które są niezbędne do~zrozumienia zasady działania
+oraz obiektywnych ograniczeń systemu. Nacisk położono na~uzasadnienie decyzji
+inżynierskich i~na~powiązanie ich z~właściwościami przedmiotu badań.
+
+\subsection{Założenia projektowe}
 \begin{itemize}[leftmargin=1.4em, itemsep=2pt]
-  \item Akwizycja danych z czterech źródeł: akcelerometr, GPS, czujnik
-        temperatury/wilgotności oraz dane o zajętości parkingów.
-  \item Klasyfikacja stanu nawierzchni do jednej z kategorii: \rvchip{rvGreen}{równa},
-        \rvchip{rvOrange}{wyboj}, \rvchip{rvRed}{dziura}, \rvchip{rvGray}{gwałtowne hamowanie}.
-  \item Przetwarzanie strumieniowe w architekturze brzegowej (edge computing).
-  \item Trwałe składowanie danych oraz dystrybucja w czasie rzeczywistym
-        (WebSocket) do aplikacji wizualizującej.
-  \item Pełna konteneryzacja środowiska uruchomieniowego (Docker Compose).
+  \item Wejście: pojedynczy strumień wideo (do~1920$\times$1080~px, 30--50~FPS)
+        z~jednej nieruchomej kamery obejmującej całe boisko.
+  \item Detekcja małej, szybkiej piłki bezkotwicową siecią konwolucyjną
+        rodziny YOLO (model YOLO26m).
+  \item Przejście z~pikseli do~metrów przez model kamery otworkowej, kalibrację
+        PnP oraz rzutowanie wsteczne (Ray Casting).
+  \item Filtracja i~wygładzanie trajektorii sigma-punktowym filtrem Kalmana (UKF)
+        w~architekturze współpracujących modeli wielokrotnych (IMM).
+  \item Śledzenie w~przestrzeni 3D adaptacją algorytmu ByteTrack
+        (\texttt{IMMTracker}) z~dwustopniową asocjacją i~odległością Mahalanobisa.
+  \item Wynik: odtworzona trajektoria 3D, statystyka gry oraz wideo-overlay
+        wizualizujący śledzenie.
 \end{itemize}
 
 %==============================================================================
-\section{Zespół projektowy i organizacja pracy}
+\section{Analiza dziedziny i przegląd metod}
 %==============================================================================
 
-\subsection{Skład zespołu i podział obowiązków}
-Projekt realizowaliśmy we dwóch. Na początku podzieliliśmy się obowiązkami tak,
-aby każdy zajął się tym, co lubi i robi sprawniej, ale zostawiliśmy też kilka
-obszarów wspólnych — dzięki temu żaden moduł nie był znany tylko jednej osobie.
-Z grubsza podział wyglądał tak: Roman wziął na siebie część serwerową i
-infrastrukturę, a Rostysław stronę kliencką i prezentację danych. Staraliśmy się,
-żeby ilość pracy rozłożyła się po połowie.
+\subsection{Specyfika siatkówki jako celu śledzenia}
+Choć śledzenie piłki sportowej pozornie przypomina inne zadania wizji komputerowej,
+siatkówka ma kilka cech, które tworzą sztywny zbiór wymagań wobec systemu. Bez ich
+uwzględnienia nawet teoretycznie poprawny potok przetwarzania może osiągać nieakceptowalną
+jakość na~realnym materiale.
+
+\textbf{Tryby szybkościowe.} Zgodnie z~przepisami międzynarodowej federacji FIVB masa piłki
+wynosi 260--280~g, co~przekłada się na~bardzo szeroki zakres prędkości liniowych w~grze:
+przyjęcie 0,5--3~m/s, wystawienie 4--8~m/s, zagrywka szybująca 13--17~m/s, zagrywka
+z~wyskoku 24--32~m/s, a~atak 30--42~m/s (wartości rekordowe sięgają 40--47~m/s). Przy
+typowej częstotliwości 30--50~FPS oznacza to, że~między dwiema kolejnymi klatkami piłka
+może przemieścić się o~0,6--1,4~m. Algorytmy opierające asocjację na~przestrzennej
+bliskości kolejnej detekcji (bramkowanie z~małym promieniem) w~fazie ataku praktycznie
+gwarantują utratę treku. Formułuje to~wymóg dynamicznego promienia bramkowania.
+
+\textbf{Wiele modeli ruchu w~jednym epizodzie.} W~odróżnieniu od~np. tenisa, gdzie piłka
+między dwoma uderzeniami zawsze porusza się balistycznie, typowy epizod siatkarski składa
+się z~5--9 interakcji kontaktowych (zagrywka, przyjęcie, wystawienie, atak, blok, obrona),
+z~których każda natychmiast zmienia zarówno moduł, jak i~kierunek wektora prędkości.
+Nieciągłych przyśpieszeń w~momencie kontaktu nie da się opisać jednym modelem ruchu — to~
+bezpośrednio motywuje przejście do~architektury współpracujących modeli wielokrotnych
+(IMM), która pozwala równolegle utrzymywać kilka hipotez o~bieżącym trybie dynamiki.
+
+\textbf{Pionowa gęstość sceny.} Użyteczna przestrzeń robocza analizy lotu sięga 9--10~m
+wysokości, podczas gdy boisko ma jedynie 9$\times$18~m. Szerokość sceny jest mniejsza niż
+połowa jej wysokości — to~przykład zadania 3D o~bardzo małym współczynniku proporcji.
+Wyklucza to~zastosowanie płaskich podejść homograficznych, ponieważ nawet niewielki błąd
+wyznaczenia wysokości ($\pm$0,5~m) potrafi całkowicie zmienić interpretację taktyczną
+akcji (np.~odróżnić wystawienie „nad siatką” od~ataku „ponad blokiem”).
+
+\textbf{Oświetlenie i~artefakty optyczne.} Oświetlenie profesjonalnych hal łączy zwykle
+górne światło reflektorowe (LED 5000--6500~K) z~cieplejszym podświetleniem trybun
+(3500--4500~K). Generuje to~dwa pasożytnicze efekty krytyczne dla~detekcji: refleksy
+spekularne na~połyskliwej powłoce piłki (jasna plama o~zmiennym rozmiarze, która podczas
+ataku potrafi przewyższyć ciemną część piłki) oraz podwójne cienie na~podłodze (przy
+szybkim ruchu wizualnie przypominają dodatkową piłkę, generując fałszywe detekcje). Efekty
+te~bezpośrednio motywują agresywną augmentację zbioru uczącego.
+
+\subsection{Przegląd metod detekcji obiektów}
+Ewolucja detektorów obiektów przebiegła od~dwuetapowych architektur typu R-CNN (osobna
+sieć propozycji regionów RPN i~osobny klasyfikator), przez ich szybsze warianty, aż do~
+jednoetapowych modeli rodziny YOLO (\emph{You Only Look Once}), które w~pojedynczym
+przejściu sieci jednocześnie lokalizują i~klasyfikują obiekty. Dla zadania pracującego
+w~budżecie zbliżonym do~czasu rzeczywistego jednoetapowość jest decydująca: dwuetapowe
+detektory, mimo wysokiej dokładności, nie mieszczą się w~napiętym budżecie latencji.
+Współczesne, bezkotwicowe (anchor-free) warianty YOLO eliminują ponadto konieczność
+ręcznego doboru kotwic, co~upraszcza detekcję obiektu o~silnie zmiennym widzialnym
+rozmiarze — a~taka właśnie jest piłka oddalająca się w~głąb sceny. Z~tych względów do~
+projektu wybrano model YOLO26m.
+
+\subsection{Przegląd metod śledzenia i filtracji}
+Warstwa śledzenia wymaga dwóch komponentów: asocjacji danych (przypisania detekcji do~
+treków) oraz filtracji stanu (wygładzania trajektorii i~predykcji). Dla asocjacji klasyczne
+podejścia (SORT) opierają się na~metryce IoU, zawodnej dla~małego, szybkiego obiektu;
+nowszy ByteTrack wprowadza dwustopniową asocjację, wykorzystując także detekcje o~niskiej
+pewności, co~znacząco poprawia ciągłość treku. Dla filtracji rozważono kilka rodzin metod;
+ich porównanie zestawiono w~tabeli~\ref{tab:filtry}.
 
 \begin{table}[H]
 \centering
-\caption{Podział obowiązków w zespole}
+\caption{Porównanie metod filtracji trajektorii dla rozważanego zadania}
+\label{tab:filtry}
 \renewcommand{\arraystretch}{1.3}
-\begin{tabularx}{\textwidth}{>{\bfseries}p{3.2cm} X}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\bfseries}p{2.6cm} X X}
 \toprule
-\rowcolor{rvHead}\textbf{Osoba} & \textbf{Czym się zajmował} \\
+\rowcolor{vbHead}\textbf{Metoda} & \textbf{Zalety} & \textbf{Ograniczenia} \\
 \midrule
-Roman Bezshchasnyi &
-  Architektura systemu, moduł Agent, klasyfikacja nawierzchni (Edge),
-  buforowanie danych (Hub, Redis), konteneryzacja (Docker), prowadzenie
-  repozytorium i harmonogramu. \\
-Rostysław Yaremko &
-  Moduł Store (API, baza danych, WebSocket), aplikacja MapView (mapa, trasa,
-  markery), klasyfikacja pogody, testy scenariuszowe oraz dokumentacja wraz z
-  materiałem graficznym. \\
+Filtr Kalmana (KF) & Optymalny i tani obliczeniowo dla układów liniowych. &
+  Tylko liniowe; przy aerodynamice nieliniowej akumuluje błąd dynamiczny. \\
+Rozszerzony KF (EKF) & Obsługuje nieliniowość przez linearyzację (jakobiany). &
+  Wymaga analitycznych pochodnych; skłonny do rozbieżności na stromych zakrętach. \\
+Sigma-punktowy KF (UKF) & Bezpochodny; dokładność rzędu 3.~rzędu Taylora; stabilny dla ruchu parabolicznego. &
+  Nieco droższy od KF (propagacja zbioru punktów sigma). \\
+Filtr cząsteczkowy (PF) & Obsługuje rozkłady niegaussowskie i multimodalne. &
+  Wymaga $\sim$2000 cząstek; degeneracja wag i resampling — wielokrotny koszt obliczeń. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\noindent Analizę wymagań i ogólny kształt architektury obmyśliliśmy razem —
-to były decyzje, które wpływały na pracę obu osób, więc nie chcieliśmy ich
-podejmować w pojedynkę. Część zadań przesuwaliśmy też między sobą w trakcie
-semestru, gdy ktoś miał akurat więcej czasu (więcej o tym w sekcji~\ref{sec:zasoby}).
+\noindent Ruch piłki jest silnie nieliniowy: siła oporu powietrza zależy od~kwadratu
+prędkości ($F_d \propto v^2$), co~eliminuje liniowy KF, a~analityczne wyprowadzenie
+jakobianów dla~modelu balistycznego z~oporem i~efektem Magnusa jest niezwykle uciążliwe
+i~niestabilne (EKF). Filtr cząsteczkowy, choć teoretycznie najogólniejszy, nie mieści się
+w~budżecie obliczeniowym. Wybrano zatem UKF jako najlepszy kompromis dokładności
+i~kosztu, osadzając go~w~architekturze IMM.
 
-\subsection{Macierz odpowiedzialności RACI}
-Żeby nie było wątpliwości, kto za co odpowiada, rozpisaliśmy zadania w prostej
-tabeli RACI (Responsible, Accountable, Consulted, Informed).
+\subsection{Degeneracja głębi monokularnej — kluczowe wyzwanie}
+\label{sec:degen}
+Wybór konfiguracji jednokamerowej ma fundamentalną cenę, którą należy uświadomić sobie
+już na~etapie analizy, ponieważ to~właśnie ona wyznacza zasadniczą granicę osiągalnej
+dokładności całego systemu. W~odróżnieniu od~stereoskopii, gdzie głębię daje triangulacja
+dwóch promieni, konfiguracja monokularna odtwarza odległość wzdłuż jednego promienia
+optycznego na~podstawie cechy pośredniej — widzialnego rozmiaru pikselowego obiektu.
+Głębię wylicza się z~podobieństwa trójkątów modelu kamery otworkowej:
+\begin{equation}
+Z_c = \frac{f \cdot D}{w},
+\end{equation}
+gdzie $f$~--~ogniskowa w~pikselach, $D$~--~fizyczna średnica piłki, $w$~--~pikselowa
+szerokość ramki detekcji. Zasadnicza wada tej zależności ujawnia się po~zróżniczkowaniu
+głębi względem mierzonego rozmiaru ramki:
+\begin{equation}
+\frac{\partial Z_c}{\partial w} = -\,\frac{f \cdot D}{w^{2}}.
+\end{equation}
+Czułość głębi na~błąd rozmiaru ramki rośnie odwrotnie kwadratowo wraz ze~zmniejszaniem
+$w$, czyli gwałtownie zaostrza się z~odległością. Jeśli dla~piłki w~strefie bliskiej błąd
+jednego piksela szerokości ramki daje przesunięcie głębi rzędu 0,14~m, to~na~dalekiej
+granicy przestrzeni roboczej (ok.~60~m) ten sam jednopikselowy szum przekłada się już
+na~ok.~2,3~m. Ponieważ detektor neuronowy obiektywnie generuje drżenie ramki na~poziomie
+1--2~px nawet w~sprzyjających warunkach (a~podczas rozmycia ruchowego znacznie większe),
+odtworzona głębia na~dalekim planie staje się zasadniczo niepewną wielkością.
+
+Ta monokularna degeneracja głębi jest korzeniem wszystkich dalszych trudności
+inżynierskich: zawyżonych pików prędkości chwilowej, niefizycznych „rozerwań” trajektorii
+oraz systematycznego niedoszacowania współrzędnych dalekiej strony boiska. Walka z~nią
+staje się centralnym zadaniem naukowo-technicznym projektu (zob.~podrozdział~\ref{sec:ochrona}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=12cm, height=5.4cm,
+  xlabel={odległość do kamery $Z_c$ [m]},
+  ylabel={$|\partial Z_c/\partial w|$ [m/px]},
+  xmin=0, xmax=62, ymin=0, ymax=2.6,
+  xtick={0,10,20,30,40,50,60},
+  grid=both, grid style={vbLight},
+  every axis label/.style={font=\small}, tick label style={font=\footnotesize},
+  axis lines=left,
+]
+\addplot[vbInk, very thick, domain=4:60, samples=80] {0.00064*x*x};
+\addplot[vbRed, dashed, thick] coordinates {(60,0)(60,2.6)};
+\node[font=\scriptsize, text=vbRed, anchor=east] at (axis cs:59,2.2) {strefa zawodności głębi};
+\node[font=\scriptsize, text=vbGray, anchor=west] at (axis cs:6,0.45) {strefa wiarygodna ($\approx$0,14 m/px)};
+\end{axis}
+\end{tikzpicture}
+\caption{Czułość odtworzonej głębi na jednopikselowy szum ramki rośnie odwrotnie
+  kwadratowo z odległością — źródło systematycznej niepewności na dalekim planie.}
+\label{fig:depth}
+\end{figure}
+
+\subsection{Wymagania funkcjonalne i niefunkcjonalne}
+Na~podstawie powyższej analizy sformułowano wymagania zestawione w~tabeli~\ref{tab:wym}.
 
 \begin{table}[H]
 \centering
-\caption{Macierz RACI dla kluczowych pakietów prac}
+\caption{Najważniejsze wymagania stawiane systemowi}
+\label{tab:wym}
 \renewcommand{\arraystretch}{1.25}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\bfseries}p{1.3cm} X}
+\toprule
+\rowcolor{vbHead}\textbf{Nr} & \textbf{Wymaganie} \\
+\midrule
+F1 & Niezawodna detekcja małej piłki, odporna na rozmycie ruchowe i artefakty optyczne. \\
+F2 & Kalibracja kamery po punktach referencyjnych boiska (PnP) i rzutowanie wsteczne detekcji do metrycznej przestrzeni 3D. \\
+F3 & Wielomodelowa filtracja trajektorii (IMM + UKF) z tłumieniem wysokoczęstotliwościowego drżenia. \\
+F4 & Asocjacja danych w metryce 3D, odporna na przełączanie identyfikatorów na kontrastowych zakłóceniach. \\
+F5 & Ochrona oszacowania głębi przed degeneracją monokularną. \\
+F6 & Obliczenie statystyki gry oraz wygenerowanie wideo-overlay. \\
+\midrule
+N1 & Łączna latencja przetwarzania klatki $\le 1/\text{FPS}$ (ok.~20~ms przy 50~FPS). \\
+N2 & Działanie na typowym sprzęcie z jedną konsumencką kartą graficzną (CUDA), bez akceleratorów serwerowych. \\
+N3 & Stabilność przy długich przerwach detekcji (okluzja piłki) i nagłym pojawieniu się obiektu. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent Budżet czasowy jest napięty: z~ok.~20~ms na~klatkę 8--12~ms zużywa inferencja
+sieci YOLO26, co~pozostawia jedynie 8--12~ms na~całą resztę potoku (dekoder wideo,
+rzutowanie wsteczne, trekowanie, wizualizacja). To~uzasadnia wybór UKF — operacje na~
+9-wymiarowym wektorze stanu bez ciężkich inwersji macierzy wysokiej wymiarowości — zamiast
+np.~filtra cząsteczkowego z~tysiącami cząstek.
+
+%==============================================================================
+\section{Architektura systemu}
+%==============================================================================
+
+System ma budowę potokową: dane przepływają jednokierunkowo od~klatki wideo do~metrycznej
+trajektorii i~statystyki gry, ze~sprzężeniem zwrotnym predykcji filtra do~przetwarzania
+kolejnej klatki. Każdy moduł realizuje pojedynczą, jasno wydzieloną odpowiedzialność,
+co~ułatwia testowanie i~strojenie poszczególnych ogniw niezależnie. Ogólny przepływ
+przedstawia rysunek~\ref{fig:pipeline}, a~odpowiedzialności komponentów — tabela~\ref{tab:moduly}.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=0.6cm and 0.9cm]
+  \node[vbnode](frame){Klatka\\\scriptsize wideo};
+  \node[vbnode, right=of frame](yolo){YOLO26m\\\scriptsize detekcja};
+  \node[vbnode, right=of yolo](ray){PnP + Ray\\\scriptsize casting 3D};
+  \node[vbnode, right=of ray](imm){IMM / UKF\\\scriptsize filtracja};
+  \node[vbnode, right=of imm](track){IMMTracker\\\scriptsize asocjacja 3D};
+  \node[vbnode, below=1.0cm of track](state){Stan 9D\\\scriptsize poz./prędk./przysp.};
+  \node[vbnode, left=of state](stat){Statystyka\\\scriptsize gry};
+  \node[vbnode, left=of stat](ovl){Wideo-\\overlay};
+  \draw[vbflow](frame)--(yolo); \draw[vbflow](yolo)-- node[above,font=\tiny]{$u,v,w$}(ray);
+  \draw[vbflow](ray)-- node[above,font=\tiny]{$X,Y,Z$}(imm);
+  \draw[vbflow](imm)--(track); \draw[vbflow](track)--(state);
+  \draw[vbflow](state)--(stat); \draw[vbflow](stat)--(ovl);
+  \draw[vbflow, dashed](state.west)to[out=180,in=-90]
+        node[below,font=\tiny,pos=0.4]{predykcja $t{+}1$}(imm.south);
+\end{tikzpicture}}
+\caption{Potok przetwarzania — od klatki wideo do trajektorii 3D, statystyki i overlay.}
+\label{fig:pipeline}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Komponenty programowe systemu}
+\label{tab:moduly}
+\renewcommand{\arraystretch}{1.2}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\bfseries\ttfamily\scriptsize}p{4.8cm} X}
+\toprule
+\rowcolor{vbHead}\textbf{Moduł} & \textbf{Odpowiedzialność} \\
+\midrule
+model\_train\_remote.py        & Donauczanie i walidacja modelu YOLO26m (chmura, GPU). \\
+get\_court\_position\_methods.py & Kalibracja PnP i rzutowanie wsteczne pikseli do przestrzeni 3D. \\
+IMM\_UKF.py                     & Jądro filtracji: sigma-punktowy UKF i modele ruchu (CV/CA/uderzenie). \\
+IMMTracker.py                  & Śledzenie 3D (ByteTrack), bramkowanie, ochrona głębi, coasting. \\
+run\_pipeline.sh               & Pojedynczy punkt wejścia uruchamiający cały potok. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+%==============================================================================
+\section{Realizacja techniczna}
+%==============================================================================
+
+\subsection{Detekcja piłki — YOLO26m}
+Pierwszym ogniwem potoku jest bezkotwicowa sieć konwolucyjna YOLO26m, dobrana ze~względu
+na~korzystny stosunek dokładności do~latencji. Aby poprawić wykrywanie małego obiektu —
+piłka zajmuje na~klatce niekiedy zaledwie kilkanaście pikseli — zwiększono rozmiar tensora
+wejściowego do~\texttt{imgsz}=1088, co~zachowuje więcej szczegółów wysokiej częstotliwości
+kosztem nieznacznie dłuższej inferencji.
+
+Model donauczono na~zbiorze ok.~14~000 obrazów zorganizowanym w~7~podzbiorów. Około~8~000
+obrazów pozyskano z~istniejących źródeł, natomiast ok.~6~000 rozmieczono ręcznie z~własnych
+nagrań meczowych — łączny nakład anotacji przekroczył 25~godzin. Tak duży udział danych
+własnych był konieczny, ponieważ publiczne zbiory rzadko zawierają piłkę w~stanie silnego
+rozmycia ruchowego, typowego dla~fazy ataku. W~konfiguracji uczenia zastosowano agresywną
+augmentację odwzorowującą realne artefakty hal sportowych: symulowane rozmycie ruchowe
+(MotionBlur), wyrównanie histogramu (CLAHE) oraz losowe zaburzenia jasności, kontrastu
+i~nasycenia (RandomBrightnessContrast, HueSaturation). Dzięki temu detektor uczy się
+rozpoznawać piłkę mimo refleksów spekularnych i~zmiennego konturu.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{img/yolo_detekcje.jpg}
+\caption{Przykładowe detekcje piłki przez model YOLO26m na klatkach walidacyjnych
+  (rzeczywiste warunki hali, rozmycie ruchowe).}
+\label{fig:yolo}
+\end{figure}
+
+\subsection{Model kamery i kalibracja PnP}
+Przejście z~pikseli do~metrów opiera się na~modelu kamery otworkowej. Rzut punktu sceny
+$\mathbf{X}=(X,Y,Z)$ na~piksel $(u,v)$ opisuje zależność:
+\begin{equation}
+s\begin{bmatrix} u \\ v \\ 1 \end{bmatrix}
+= K\,[\,R \mid t\,]\begin{bmatrix} X \\ Y \\ Z \\ 1 \end{bmatrix}, \qquad
+K = \begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix},
+\end{equation}
+gdzie $K$~--~macierz parametrów wewnętrznych (ogniskowe $f_x,f_y$ i~punkt główny
+$c_x,c_y$), a~$[R \mid t]$~--~parametry zewnętrzne (obrót i~przesunięcie kamery względem
+układu hali). Parametry zewnętrzne wyznacza się, rozwiązując zadanie perspektywy $n$
+punktów (PnP) za~pomocą funkcji \texttt{solvePnP}: na~obrazie wskazuje się kilka punktów
+referencyjnych o~znanych współrzędnych metrycznych (narożniki i~przecięcia linii boiska),
+a~algorytm dopasowuje pozę kamery minimalizującą błąd reprojekcji. Kalibracja wykonywana
+jest jednorazowo dla~danego ujęcia.
+
+\subsection{Rzutowanie wsteczne i rekonstrukcja 3D}
+Mając pozę kamery, dla~każdej detekcji buduje się promień optyczny biegnący od~środka
+optycznego przez piksel $(u,v)$ (Ray Casting). Sama informacja o~kierunku promienia nie
+wystarcza jednak do~określenia położenia piłki — potrzebna jest jeszcze odległość wzdłuż
+promienia, czyli głębia, którą szacuje się z~pikselowego rozmiaru ramki według wzoru~(1).
+Połączenie kierunku promienia z~oszacowaną głębią daje pełne położenie $(X,Y,Z)$
+w~metrycznym układzie hali. Dodatkowy mechanizm inwersji bazy osi dostosowuje orientację
+układu współrzędnych do~konwencji przyjętej w~modelu balistycznym filtra. W~ten sposób
+płaska detekcja~2D zostaje przekształcona w~punkt przestrzeni trójwymiarowej
+(rys.~\ref{fig:court}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.95, font=\footnotesize]
+  \fill[vbLight] (0,0) -- (8,0) -- (10,1.6) -- (2,1.6) -- cycle;
+  \draw[vbInk, thick] (0,0) -- (8,0) -- (10,1.6) -- (2,1.6) -- cycle;
+  \draw[vbGray] (4,0)--(6,1.6);
+  \node[font=\scriptsize, text=vbGray] at (5,0.3) {boisko 9$\times$18 m};
+  \node[vbnode, minimum width=1.4cm, minimum height=0.7cm] (cam) at (-1.2,3.2) {kamera};
+  \draw[vbflow, vbInk, line width=0.9pt] (cam.east) -- (6.4,2.6);
+  \node[fill=vbGray, circle, inner sep=2pt] (ball) at (6.4,2.6) {};
+  \node[font=\scriptsize, text=vbInk, anchor=south] at (6.4,2.75) {piłka $(X,Y,Z)$};
+  \draw[vbGray, dashed] (6.4,2.6) -- (7.0,1.12);
+  \node[font=\scriptsize, text=vbGray, anchor=west] at (7.05,1.9) {wysokość $\le$ 9--10 m};
+  \node[font=\scriptsize, text=vbInk, anchor=south, rotate=18] at (2.4,3.05) {promień optyczny (Ray Casting)};
+\end{tikzpicture}
+\caption{Rzutowanie wsteczne: piłka leży na promieniu optycznym, a jej głębia wzdłuż
+  promienia szacowana jest z pikselowego rozmiaru ramki.}
+\label{fig:court}
+\end{figure}
+
+\subsection{Filtracja — sigma-punktowy filtr Kalmana (UKF)}
+Surowa trajektoria 3D jest zaszumiona drżeniem ramki i~podlega nieliniowej aerodynamice.
+Zastosowano sigma-punktowy filtr Kalmana, który zamiast linearyzacji (jak EKF) propaguje
+przez nieliniowe równania ruchu mały, deterministyczny zbiór punktów sigma. Punkty te~
+dobiera się tak, aby dokładnie odwzorowały średnią i~kowariancję wejściowego rozkładu:
+\begin{equation}
+\mathcal{X}_0 = \hat{x}, \qquad
+\mathcal{X}_i = \hat{x} \pm \left(\sqrt{(n+\lambda)\,P}\right)_i, \qquad
+\lambda = \alpha^2 (n+\kappa) - n,
+\end{equation}
+gdzie $n$~--~wymiar stanu, a~$\alpha,\beta,\kappa$~--~parametry rozrzutu sterujące tym, jak
+daleko od~średniej rozkłada się chmura punktów sigma. Po~przepuszczeniu punktów przez
+funkcję nieliniową ruchu $f(\cdot)$ średnią i~kowariancję transformowanego rozkładu
+odtwarza się ważonym sumowaniem (krok predykcji):
+\begin{equation}
+\hat{x}^- = \sum_{i=0}^{2n} W_i^{(m)}\,\mathcal{X}_i^{\,*}, \qquad
+P^- = \sum_{i=0}^{2n} W_i^{(c)}\,(\mathcal{X}_i^{\,*}-\hat{x}^-)(\mathcal{X}_i^{\,*}-\hat{x}^-)^{\!\top} + Q,
+\end{equation}
+gdzie $\mathcal{X}_i^{\,*}=f(\mathcal{X}_i)$, a~wagi $W^{(m)}$ i~$W^{(c)}$ (dla~średniej i~kowariancji)
+wynikają z~parametrów $\lambda,\alpha,\beta$. Gdy~napłynie nowa detekcja, punkty sigma rzutuje
+się modelem pomiaru $h(\cdot)$ do~przestrzeni obserwacji i~wyznacza innowację oraz jej
+kowariancję $S$ wraz z~kowariancją skrośną $P_{xz}$. Korekta przebiega według klasycznych
+równań Kalmana ze~wzmocnieniem $K$:
+\begin{equation}
+K = P_{xz}\,S^{-1}, \qquad
+\hat{x} = \hat{x}^- + K\,(z - \hat{z}^-), \qquad
+P = P^- - K\,S\,K^{\!\top},
+\end{equation}
+gdzie $z$~--~bieżący pomiar (zrekonstruowana pozycja 3D), a~$\hat{z}^-$~--~jego predykcja.
+Filtr jest bezpochodny (nie wymaga jakobianów) i~osiąga dokładność co~najmniej~2.~rzędu
+rozwinięcia Taylora dla~rozkładów gaussowskich, zachowując stabilność na~stromych zakrętach
+trajektorii (moment uderzenia), gdzie linearyzacja EKF rozbiega się. Wektor stanu jest
+9-wymiarowy --- położenie, prędkość i~przyśpieszenie w~trzech osiach $(x,y,z)$ --- co~pozwala
+modelować lot balistyczny z~oporem powietrza bez~zewnętrznych założeń o~kształcie toru.
+
+Macierz $Q$ opisuje szum procesu (niepewność modelu ruchu), a~macierz $R$ --- szum pomiaru.
+Kluczowym usprawnieniem dla~zadania monokularnego jest \emph{anizotropowa} macierz $R$:
+ponieważ oś głębi $Z$ jest rekonstruowana znacznie mniej pewnie niż~współrzędne boczne
+(zob.~podrozdz.~\ref{sec:degen}), wariancję pomiaru wzdłuż~$Z$ zwiększa się względem~osi
+$X,Y$, a~przy~dużych, niefizycznych skokach głębi dodatkowo ją~inflatuje. Dzięki temu filtr
+„ufa” stabilnym współrzędnym bocznym, a~zaszumioną głębię wygładza, co~ogranicza
+charakterystyczne dla~monokularu drgania toru wzdłuż~osi optycznej. Symetria i~dodatnia
+określoność macierzy kowariancji są~wymuszane numerycznie po~każdym kroku, aby~zapobiec
+degeneracji filtra w~długich epizodach.
+
+\subsection{Architektura współpracujących modeli wielokrotnych (IMM)}
+Pojedynczy model ruchu nie opisze epizodu z~wieloma kontaktami. Dlatego UKF osadzono
+w~architekturze IMM, która równolegle utrzymuje kilka filtrów odpowiadających różnym
+hipotezom o~bieżącym trybie dynamiki i~łączy ich estymaty proporcjonalnie do~bieżących
+prawdopodobieństw trybów. W~każdym kroku wykonywane są: mieszanie warunkowych estymat
+(zgodnie z~macierzą prawdopodobieństw przejść między trybami), równoległa predykcja
+i~korekcja w~każdym modelu, aktualizacja prawdopodobieństw trybów na~podstawie
+wiarygodności (likelihood) pomiaru oraz połączenie wyników w~jedną estymatę. W~systemie
+zdefiniowano trzy modele: ruch o~stałej prędkości (CV) dla~spokojnych faz, ruch o~stałym
+przyśpieszeniu (CA) dla~lotu balistycznego z~oporem oraz model „uderzenia” dla~nieciągłych
+zmian wektora prędkości w~momencie kontaktu (rys.~\ref{fig:imm}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.7cm and 1.5cm, font=\footnotesize]
+  \node[vbnode, minimum width=2cm](cv){CV\\\scriptsize stała prędkość};
+  \node[vbnode, below=of cv, minimum width=2cm](ca){CA\\\scriptsize lot balistyczny};
+  \node[vbnode, below=of ca, minimum width=2cm](hit){Uderzenie\\\scriptsize zmiana wektora};
+  \node[vbnode, right=2.4cm of ca, minimum width=2.2cm](mix){Mieszanie\\IMM};
+  \draw[vbflow](cv.east)--(mix.west);
+  \draw[vbflow](ca)--(mix);
+  \draw[vbflow](hit.east)--(mix.west);
+  \draw[vbflow, dashed](mix.north)to[out=60,in=0](cv.east);
+  \node[vbnode, right=1.5cm of mix, minimum width=2cm](out){Estymata\\stanu};
+  \draw[vbflow](mix)--(out);
+\end{tikzpicture}
+\caption{Współpracujące modele wielokrotne: równoległe hipotezy ruchu mieszane wagami
+  prawdopodobieństw trybów.}
+\label{fig:imm}
+\end{figure}
+
+\subsection{Śledzenie 3D — adaptacja ByteTrack (IMMTracker)}
+Asocjację danych zrealizowano jako adaptację algorytmu ByteTrack do~przestrzeni
+trójwymiarowej. Zamiast metryki IoU (zawodnej dla~małego, szybkiego obiektu) zastosowano
+statystyczną odległość Mahalanobisa między predykcją filtra a~detekcją:
+\begin{equation}
+d^2 = (z - H\hat{x})^{\!\top}\, S^{-1}\, (z - H\hat{x}),
+\end{equation}
+gdzie $H$~--~macierz pomiaru, a~$S$~--~macierz kowariancji innowacji. Odległość ta~uwzględnia
+niepewność estymaty: dopuszczalne odchylenie detekcji jest większe tam, gdzie filtr jest
+mniej pewny. Asocjacja jest dwustopniowa: najpierw dopasowuje się detekcje o~wysokiej
+pewności, a~następnie — w~obrębie pozostałych bramek — detekcje słabsze, co~pozwala
+utrzymać trek mimo chwilowych spadków pewności detektora. Bramka Mahalanobisa jest
+dynamiczna i~rozszerza się automatycznie, gdy model wykryje duży rozrzut prędkości (faza
+ataku). Cykl życia treku obejmuje stany: wstępny (tentative), potwierdzony (confirmed)
+oraz utracony; przy~chwilowej okluzji piłki trek przechodzi w~tryb \emph{coastingu},
+w~którym jego stan jest podtrzymywany samą predykcją filtra (rys.~\ref{fig:bytetrack}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm and 1.1cm, font=\scriptsize,
+  bstep/.style={rectangle, rounded corners=2pt, draw=vbInk, fill=vbLight,
+               text width=2.6cm, align=center, minimum height=1cm}]
+  \node[bstep](pred){Predykcja IMM\\(bramka 3D)};
+  \node[bstep, right=of pred](h){Etap 1:\\detekcje pewne};
+  \node[bstep, right=of h](l){Etap 2:\\detekcje słabe};
+  \node[bstep, right=of l](upd){Korekcja\\stanu};
+  \node[bstep, below=0.8cm of l](coast){Coasting\\(brak detekcji)};
+  \draw[vbflow](pred)--(h); \draw[vbflow](h)--(l); \draw[vbflow](l)--(upd);
+  \draw[vbflow, dashed](pred.south)to[out=-90,in=180](coast.west);
+  \draw[vbflow, dashed](coast.east)to[out=0,in=-90](upd.south);
+\end{tikzpicture}
+\caption{Dwustopniowa asocjacja ByteTrack w 3D z trybem coastingu przy braku detekcji.}
+\label{fig:bytetrack}
+\end{figure}
+
+\subsection{Mechanizmy ochrony głębi przed degeneracją}
+\label{sec:ochrona}
+Sercem oryginalnego wkładu projektu jest zespół mechanizmów chroniących oszacowanie głębi
+przed degeneracją opisaną w~podrozdziale~\ref{sec:degen}. Wynikają one~wprost z~obserwacji,
+że~składowa głębinowa pomiaru jest znacznie mniej wiarygodna od~składowych bocznych,
+a~jej wiarygodność dodatkowo maleje z~odległością:
+\begin{itemize}[leftmargin=1.4em, itemsep=3pt]
+  \item \textbf{Anizotropowy model szumu pomiaru.} Składowa głębinowa otrzymuje wyższą
+        wariancję niż składowe boczne, a~ich proporcja jest adaptacyjna — filtr ufa głębi
+        proporcjonalnie do~jej wiarygodności w~danej odległości. Dzięki temu zaszumiona
+        głębia z~dalekiego planu nie „rozkołysuje” całej estymaty.
+  \item \textbf{Bramka asocjacji odporna na głębię.} Innowacja boczna i~głębinowa są
+        rozdzielane: duże odchylenie wyłącznie w~głębi nie odrzuca poprawnej detekcji
+        (zastosowano martwą strefę innowacji głębi), a~przy~dużych innowacjach wariancja
+        $\sigma_Z^2$ jest dodatkowo inflowana. Zapobiega to~fałszywym „rozerwaniom” treku
+        spowodowanym samym szumem głębi.
+  \item \textbf{Fizyczne ograniczniki predykcji.} Wprowadzono pułap detekcji na~dalekim
+        planie (eliminujący artefakty tła) oraz „ogrodzenie” głębi w~trybie coastingu
+        (clamp~$Z$ do~realnego przedziału roboczego). Mechanizmy te~zapobiegają „odlotom”
+        treku w~nierealne odległości, gdy filtr pracuje wyłącznie na~predykcji.
+\end{itemize}
+
+%==============================================================================
+\section{Wyniki eksperymentalne}
+%==============================================================================
+
+\subsection{Metodyka walidacji}
+Dla wideo transmisyjnego nie istnieje synchroniczny trójwymiarowy wzorzec rzeczywistego
+położenia piłki, dlatego zastosowano walidację pośrednią opartą na~trzech grupach
+kryteriów. Pierwszą są metryki dokładności detekcji (mAP, precyzja, czułość) jako miara
+jakości pierwotnego źródła danych. Drugą — miary stabilności śledzenia (pokrycie
+trajektorii i~liczba przełączeń identyfikatora) oraz kontrolowana analiza ablacyjna
+mechanizmów ochrony głębi. Trzecią — fizyczna spójność odtworzonej dynamiki pionowej,
+tj.~zgodność odtworzonego przyśpieszenia w~fazie wolnego lotu z~wartością odniesienia
+przyśpieszenia ziemskiego, traktowana jako pośredni dowód poprawności geometrycznej
+rekonstrukcji.
+
+\subsection{Jakość detekcji}
+\begin{table}[H]
+\centering
+\caption{Wybrane metryki jakości modelu YOLO26m (zbiór walidacyjny)}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{X c}
+\toprule
+\rowcolor{vbHead}\textbf{Metryka} & \textbf{Wartość} \\
+\midrule
+mAP@0.5            & 0,857 \\
+Rozmiar wejścia (imgsz)   & 1088 \\
+Inferencja na klatkę      & 8--12 ms \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent Osiągnięta wartość mAP@0.5 = 0,857 jest dobra dla~obiektu tak małego i~szybkiego,
+zwłaszcza wobec silnego rozmycia ruchowego w~fazie ataku. Krzywa precyzja--czułość
+(rys.~\ref{fig:pr}) potwierdza wysoką precyzję w~szerokim zakresie progów, co~jest istotne,
+ponieważ to~właśnie fałszywe detekcje (podwójne cienie, refleksy) najsilniej obciążają
+warstwę śledzenia.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{img/yolo_pr.png}
+\caption{Krzywa precyzja--czułość (Precision--Recall) modelu detekcji piłki.}
+\label{fig:pr}
+\end{figure}
+
+\subsection{Stabilność śledzenia 3D}
+Kontrolowana analiza ablacyjna mechanizmów ochrony głębi (podrozdział~\ref{sec:ochrona})
+potwierdziła ich istotny wpływ na~stabilność. Po~ich włączeniu liczba nierealnych skoków
+głębi spadła z~30 do~1 na~epizod, a~liczba przełączeń identyfikatora treku (ID switch)
+z~19 do~3, przy~zachowaniu zerowego błędu bocznego (tabela~\ref{tab:ablacja}). Oznacza to,
+że~mechanizmy te~tłumią zakłócenia wyłącznie w~niewiarygodnej składowej głębinowej, nie
+degradując dobrze obserwowanych składowych bocznych.
+
+\begin{table}[H]
+\centering
+\caption{Wpływ mechanizmów ochrony głębi (analiza ablacyjna)}
+\label{tab:ablacja}
+\renewcommand{\arraystretch}{1.2}
 \begin{tabularx}{\textwidth}{X c c}
 \toprule
-\rowcolor{rvHead}\textbf{Pakiet pracy} & \textbf{Roman} & \textbf{Rostysław} \\
+\rowcolor{vbHead}\textbf{Wskaźnik} & \textbf{Bez ochrony} & \textbf{Z ochroną} \\
 \midrule
-Analiza wymagań i koncepcja systemu        & A/R & C \\
-Architektura i interfejsy modułów          & A/R & C \\
-Moduł Agent (akwizycja, MQTT)              & A/R & I \\
-Moduł Edge (klasyfikacja nawierzchni)      & A/R & I \\
-Moduł Hub (Redis, buforowanie)             & A/R & I \\
-Moduł Store (API, PostgreSQL, WebSocket)   & C   & A/R \\
-Aplikacja MapView (Kivy)                   & I   & A/R \\
-Klasyfikacja warunków pogodowych           & I   & A/R \\
-Konteneryzacja (Docker Compose)            & A/R & I \\
-Testy i scenariusze użycia                 & C   & A/R \\
-Dokumentacja i materiał graficzny          & C   & A/R \\
-\bottomrule
-\end{tabularx}
-\end{table}
-\noindent\footnotesize R~--~Wykonawca,\quad A~--~Odpowiedzialny (rozliczany),\quad
-C~--~Konsultowany,\quad I~--~Informowany.\normalsize
-
-\subsection{Narzędzia współpracy}
-\begin{table}[H]
-\centering
-\caption{Narzędzia wykorzystane do organizacji pracy zespołowej}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{>{\bfseries}p{3.6cm} X}
-\toprule
-\rowcolor{rvHead}\textbf{Obszar} & \textbf{Narzędzie / metoda} \\
-\midrule
-Kontrola wersji        & Git + GitHub (gałęzie funkcyjne, Pull Requesty, code review) \\
-Zarządzanie zadaniami  & Tablica Kanban (backlog $\rightarrow$ w toku $\rightarrow$ przegląd $\rightarrow$ gotowe) \\
-Komunikacja bieżąca    & Komunikator zespołowy + krótkie synchronizacje (stand-up) \\
-Środowisko uruchomieniowe & Docker Compose (powtarzalne środowisko dla obu osób) \\
-Dokumentacja           & \LaTeX{} (system kontroli wersji wspólny z kodem) \\
+Nierealne skoki głębi (na epizod) & 30 & 1 \\
+Przełączenia identyfikatora (ID switch) & 19 & 3 \\
+Błąd boczny & — & $\approx$ 0 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-%==============================================================================
-\section{Zarządzanie projektem}
-%==============================================================================
-
-\subsection{Karta projektu}
-Zanim zabraliśmy się do kodu, spisaliśmy na jednej stronie najważniejsze ustalenia:
-po co robimy projekt, co dokładnie ma powstać, ile mamy czasu i kiedy uznamy, że
-się udało. Ta krótka notatka pomagała nam później wracać do tego, co naprawdę było
-ważne.
-
-\begin{table}[H]
-\centering
-\caption{Karta projektu RoadVision}
-\renewcommand{\arraystretch}{1.25}
-\begin{tabularx}{\textwidth}{>{\bfseries}p{3.6cm} X}
-\toprule
-\rowcolor{rvHead}\textbf{Element} & \textbf{Opis} \\
-\midrule
-Cel             & Zbudowanie działającego systemu monitorowania jakości nawierzchni z wizualizacją w czasie rzeczywistym. \\
-Sponsor         & Prowadzący przedmiot Projekt Zespołowy (WSIiZ). \\
-Zespół          & 2 osoby (kierownik/architekt, programista/wizualizacja). \\
-Czas            & 05.05.2026 -- 09.06.2026 (5 tygodni). \\
-Ograniczenia    & Środowisko studenckie, brak realnego sprzętu IoT (dane odtwarzane z CSV). \\
-Kryteria sukcesu& Kompletny potok end-to-end, wizualizacja na mapie w czasie rzeczywistym, terminowe oddanie. \\
-Poza zakresem   & Produkcyjne wdrożenie, integracja z rzeczywistą flotą pojazdów. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\subsection{Przyjęta metodyka}
-Na pierwszym spotkaniu zastanawialiśmy się, czy rozpisać cały projekt „z góry”, czy
-raczej pracować małymi krokami. Wyszło nam coś pośredniego. Rzeczy, które trudno
-później zmienić — analizę wymagań i ogólną architekturę — przemyśleliśmy dokładnie
-na samym początku. Resztę, czyli pisanie kolejnych modułów, podzieliliśmy na
-tygodniowe kawałki: pod koniec każdego tygodnia mieliśmy działający fragment i
-wspólnie go przeglądaliśmy. Dzięki temu nie musieliśmy nic dużego przerabiać, a
-problemy z łączeniem modułów wychodziły szybko.
-
-\begin{figure}[H]
-\centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[node distance=0.55cm and 1.0cm]
-  \node[rvnode, fill=rvLight] (a){Analiza\\wymagań};
-  \node[rvnode, right=of a, fill=rvLight] (b){Projekt\\architektury};
-  \node[rvnode, right=of b, fill=rvLightGreen, draw=rvGreen, text=rvGreen] (c){Iteracja 1\\Back-end};
-  \node[rvnode, right=of c, fill=rvLightGreen, draw=rvGreen, text=rvGreen] (d){Iteracja 2\\Integracja};
-  \node[rvnode, right=of d, fill=rvLightGreen, draw=rvGreen, text=rvGreen] (e){Iteracja 3\\MapView};
-  \node[rvnode, right=of e, fill=rvLightOrange, draw=rvOrange, text=rvOrange] (f){Testy +\\dokumentacja};
-  \draw[rvflow](a)--(b);\draw[rvflow](b)--(c);\draw[rvflow](c)--(d);
-  \draw[rvflow](d)--(e);\draw[rvflow](e)--(f);
-  % zwrotne sprzężenie — łuk poprowadzony wyraźnie pod blokami, z dala od ramek
-  \draw[rvflow, dashed] (f.south) to[out=-90, in=-90, looseness=0.5] (c.south);
-  \node[font=\scriptsize\itshape, text=rvGray]
-    at ($(c.south)!0.5!(f.south) + (0,-1.25cm)$) {przegląd / sprzężenie zwrotne};
-\end{tikzpicture}}
-\caption{Hybrydowy przepływ faz projektu — sekwencyjne planowanie i iteracyjna implementacja.}
-\end{figure}
-
-\subsection{Struktura podziału prac (WBS)}
-Aby nie zgubić się w zakresie, rozpisaliśmy cały projekt na kartce, a następnie
-przenieśliśmy go do formy struktury podziału prac (WBS). Podzieliliśmy całość na
-cztery główne pakiety prac, a każdy z nich na drobniejsze zadania — dzięki temu
-łatwiej było nam oszacować pracochłonność i zbudować harmonogram. Struktura ta
-stała się dla nas punktem wyjścia przy podziale obowiązków między siebie.
-
-\begin{figure}[H]
-\centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[
-  every node/.style={rounded corners=2pt, draw, align=center, font=\scriptsize,
-                     inner sep=3pt, minimum height=6mm},
-  level 1/.style={sibling distance=60mm, level distance=14mm},
-  level 2/.style={sibling distance=15mm, level distance=16mm},
-  edge from parent/.style={draw=rvGray, -{Stealth[length=1.5mm]}}]
-  \node[fill=rvGray, text=white, font=\scriptsize\bfseries] {RoadVision}
-    child {node[fill=rvLight]{1. Zarządzanie}
-      child {node{1.1 Plan}}
-      child {node{1.2 Ryzyko}}
-      child {node{1.3 Kontrola}}}
-    child {node[fill=rvLightGreen]{2. Back-end}
-      child {node{2.1 Agent}}
-      child {node{2.2 Edge}}
-      child {node{2.3 Hub}}
-      child {node{2.4 Store}}}
-    child {node[fill=rvLightOrange]{3. Front-end}
-      child {node{3.1 Mapa}}
-      child {node{3.2 Pogoda}}
-      child {node{3.3 Trasa}}}
-    child {node[fill=rvLight]{4. Wdrożenie}
-      child {node{4.1 Docker}}
-      child {node{4.2 Testy}}
-      child {node{4.3 Dok.}}};
-\end{tikzpicture}}
-\caption{Struktura podziału prac (Work Breakdown Structure) projektu RoadVision.}
-\label{fig:wbs}
-\end{figure}
-
-\subsection{Estymacja pracochłonności (metoda trójpunktowa PERT)}
-Pracochłonność pakietów oszacowano metodą trójpunktową PERT, w której wartość
-oczekiwaną wyznacza się ze wzoru $t_{e}=\frac{o+4m+p}{6}$, gdzie $o$ — szacunek
-optymistyczny, $m$ — najbardziej prawdopodobny, $p$ — pesymistyczny (w dniach
-roboczych). Podejście to uwzględnia niepewność i ogranicza ryzyko niedoszacowania
-(zabezpieczenie R5).
-
-\begin{table}[H]
-\centering
-\caption{Estymacja pracochłonności metodą PERT (w dniach roboczych)}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{X c c c c}
-\toprule
-\rowcolor{rvHead}\textbf{Pakiet pracy} & \textbf{$o$} & \textbf{$m$} & \textbf{$p$} & \textbf{$t_e$} \\
-\midrule
-Analiza wymagań i architektura & 4 & 6 & 9 & 6,2 \\
-Moduł Agent                    & 2 & 3 & 5 & 3,2 \\
-Moduł Edge (klasyfikacja)      & 3 & 4 & 7 & 4,3 \\
-Hub + Store                    & 3 & 5 & 8 & 5,2 \\
-Aplikacja MapView              & 5 & 7 & 11 & 7,3 \\
-Konteneryzacja i testy         & 3 & 4 & 6 & 4,2 \\
-Dokumentacja                   & 3 & 5 & 8 & 5,2 \\
-\midrule
-\rowcolor{rvHead}\textbf{Razem} & \textbf{23} & \textbf{34} & \textbf{54} & \textbf{35,6} \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\subsection{Harmonogram — wykres Gantta}
-Realizację zaplanowano na okres od 5 maja do 9 czerwca 2026
-(pięć tygodni roboczych). Harmonogram przedstawiono na wykresie Gantta
-(rys.~\ref{fig:gantt}); kamienie milowe oznaczono rombami.
-
-\begin{figure}[H]
-\centering
-\resizebox{\textwidth}{!}{%
-\begin{ganttchart}[
-  hgrid, vgrid,
-  bar height=0.6,
-  bar/.append style={fill=rvCyan, draw=rvBlue},
-  bar label font=\small,
-  group/.append style={fill=rvGray, draw=rvGray},
-  group label font=\small\bfseries,
-  milestone/.append style={fill=rvOrange, draw=rvRed},
-  milestone label font=\small\itshape,
-  title/.style={draw=none, fill=rvHead},
-  title label font=\small\bfseries,
-  link/.style={-{Stealth[length=1.4mm]}, rvGray}
-]{1}{36}
-  \gantttitle{05--11.05}{7}
-  \gantttitle{12--18.05}{7}
-  \gantttitle{19--25.05}{7}
-  \gantttitle{26.05--01.06}{7}
-  \gantttitle{02--09.06}{8} \\
-  \ganttgroup{1. Zarządzanie}{1}{36} \\
-  \ganttbar{Analiza wymagań}{1}{5} \\
-  \ganttmilestone{Zatwierdzenie zakresu}{5} \\
-  \ganttbar{Projekt architektury}{5}{9} \\
-  \ganttgroup{2. Back-end}{9}{24} \\
-  \ganttbar{Agent (MQTT, akwizycja)}{9}{13} \\
-  \ganttbar{Edge (klasyfikacja)}{12}{17} \\
-  \ganttbar{Hub + Store (Redis, DB)}{16}{21} \\
-  \ganttbar{Integracja back-end}{21}{24} \\
-  \ganttmilestone{Działający potok danych}{24} \\
-  \ganttgroup{3. Front-end}{20}{31} \\
-  \ganttbar{MapView (mapa, trasa)}{20}{26} \\
-  \ganttbar{Markery + pogoda}{26}{31} \\
-  \ganttgroup{4. Wdrożenie}{27}{36} \\
-  \ganttbar{Docker Compose}{27}{29} \\
-  \ganttbar{Testy scenariuszowe}{30}{34} \\
-  \ganttbar{Dokumentacja}{28}{36} \\
-  \ganttmilestone{Oddanie projektu}{36}
-  \ganttlink{elem2}{elem4}
-  \ganttlink{elem9}{elem10}
-\end{ganttchart}}
-\caption{Harmonogram projektu RoadVision (05.05--09.06.2026) w formie wykresu Gantta.}
-\label{fig:gantt}
-\end{figure}
-
-\subsection{Kamienie milowe}
-\begin{table}[H]
-\centering
-\caption{Kamienie milowe projektu}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{c >{\bfseries}p{5.2cm} X}
-\toprule
-\rowcolor{rvHead}\textbf{Data} & \textbf{Kamień milowy} & \textbf{Kryterium akceptacji} \\
-\midrule
-09.05.2026 & Zatwierdzenie zakresu       & Uzgodniona lista wymagań i kategorii stanu drogi. \\
-13.05.2026 & Zamrożenie architektury     & Zdefiniowane interfejsy między modułami. \\
-28.05.2026 & Działający potok danych     & Dane przechodzą Agent$\rightarrow$Store bez błędów. \\
-04.06.2026 & Kompletny produkt (MVP)     & Wizualizacja na mapie działa w czasie rzeczywistym. \\
-09.06.2026 & Oddanie projektu            & Repozytorium i sprawozdanie gotowe do prezentacji. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\subsection{Analiza ścieżki krytycznej (CPM)}
-W celu identyfikacji zadań decydujących o terminie zakończenia przeprowadzono
-analizę metodą ścieżki krytycznej (CPM). Diagram sieciowy
-(rys.~\ref{fig:cpm}) przedstawia zależności między czynnościami; ścieżkę krytyczną
-zaznaczono kolorem czerwonym. Każde opóźnienie zadania leżącego na tej ścieżce
-przekłada się bezpośrednio na opóźnienie całego projektu (zapas czasu = 0).
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  node distance=1.5cm and 1.4cm,
-  act/.style={circle, draw=rvGray, fill=rvLight, minimum size=1.05cm, font=\scriptsize\bfseries, align=center},
-  crit/.style={circle, draw=rvRed, line width=1.2pt, fill=rvLightOrange, text=rvRed, minimum size=1.05cm, font=\scriptsize\bfseries, align=center},
-  e/.style={-{Stealth[length=2mm]}, rvGray},
-  ce/.style={-{Stealth[length=2mm]}, rvRed, line width=1.1pt}]
-  \node[crit](A){A\\4d};
-  \node[crit, right=of A](B){B\\4d};
-  \node[crit, right=of B](C){C\\5d};
-  \node[act, above right=0.6cm and 1.3cm of C](D){D\\5d};
-  \node[crit, below right=0.6cm and 1.3cm of C](E){E\\5d};
-  \node[crit, right=2.6cm of C, yshift=-0.0cm](F){F\\4d};
-  \node[crit, right=of F](G){G\\4d};
-  \node[crit, right=of G](H){H\\4d};
-  \draw[ce](A)--(B); \draw[ce](B)--(C);
-  \draw[e](C)--(D); \draw[ce](C)--(E);
-  \draw[e](D)-- (F); \draw[ce](E)--(F);
-  \draw[ce](F)--(G); \draw[ce](G)--(H);
-\end{tikzpicture}
-\caption{Diagram sieciowy CPM. Ścieżka krytyczna A--B--C--E--F--G--H (30 dni roboczych) wyróżniona kolorem czerwonym; czynność D (projekt MapView) posiada zapas czasu.}
-\label{fig:cpm}
-\end{figure}
-
-\noindent\footnotesize
-A~--~Analiza wymagań, B~--~Architektura, C~--~Edge (klasyfikacja),
-D~--~MapView, E~--~Hub/Store, F~--~Integracja, G~--~Konteneryzacja, H~--~Testy.
-\normalsize
-
-\subsection{Zarządzanie zasobami i obciążeniem}
-\label{sec:zasoby}
-Głównym ograniczonym zasobem w projekcie studenckim jest czas. Aby utrzymać
-równomierne obciążenie obu członków zespołu, pracochłonność estymowano dla każdego
-pakietu pracy, a następnie bilansowano przydziały. Rozkład szacowanego nakładu
-pracy przedstawia rys.~\ref{fig:effort}.
+\subsection{Analiza trybów IMM oraz walidacja fizyczna}
+Rozkład prawdopodobieństw trybów IMM odzwierciedla strukturę gry: dominuje model
+o~stałej prędkości (śr. 0,91), natomiast modele balistyczny (0,07) oraz uderzenia (0,02)
+uaktywniają się w~krótkich, lecz kluczowych momentach kontaktu (rys.~\ref{fig:immbar}).
+Potwierdza to~poprawne działanie mechanizmu przełączania trybów — architektura nie „grzęźnie”
+w~jednym modelu, lecz reaguje na~nieciągłości dynamiki. Walidacja fizyczna odtworzonego
+przyśpieszenia pionowego w~fazie wolnego lotu dała wartość bliską odniesieniu, co~stanowi
+niezależne potwierdzenie poprawności geometrycznej rekonstrukcji 3D.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
-\pie[radius=2.3, text=legend, color={rvBlue, rvGreen, rvOrange, rvGray},
-     font=\small, sum=auto]{
-  18/Zarządzanie i analiza,
-  40/Back-end (Agent--Store),
-  27/Front-end (MapView),
-  15/Wdrożenie i testy}
+\begin{axis}[
+  width=13cm, height=5.2cm,
+  xbar, xmin=0, xmax=1.12,
+  ytick=data, symbolic y coords={hit, ca, cv},
+  yticklabels={Uderzenie, CA (balistyczny), CV (stała prędkość)},
+  nodes near coords, point meta=explicit symbolic,
+  nodes near coords style={font=\footnotesize, anchor=west, xshift=2pt},
+  bar width=14pt, enlarge y limits=0.45,
+  xtick={0,0.2,0.4,0.6,0.8,1.0},
+  xlabel={średnie prawdopodobieństwo trybu},
+  tick label style={font=\footnotesize},
+  yticklabel style={align=right}, every axis label/.style={font=\small},
+  axis lines=left, xmajorgrids, grid style={vbLight},
+]
+\addplot[fill=vbCyan, draw=vbInk] coordinates {(0.91,cv)[0,91] (0.07,ca)[0,07] (0.02,hit)[0,02]};
+\end{axis}
 \end{tikzpicture}
-\caption{Szacunkowy rozkład nakładu pracy według pakietów WBS (\%).}
-\label{fig:effort}
+\caption{Średni rozkład prawdopodobieństw trybów IMM w testowych epizodach gry.}
+\label{fig:immbar}
 \end{figure}
 
-\noindent Staraliśmy się też nie obciążać obu osób naraz: zadania o niższym
-priorytecie przesuwaliśmy w obrębie ich zapasu czasu (por.~CPM), żeby uniknąć
-tygodni, w których oba moduły wymagałyby intensywnej pracy w tym samym czasie.
-Podział obowiązków (opisany w sekcji~2.1) ustaliliśmy tak, aby każdy zajmował się
-zadaniami bliższymi jego umiejętnościom — dzięki temu praca szła szybciej.
+\subsection{Prezentacja działania systemu}
+\begin{sloppypar}
+Poniższe klatki overlay pochodzą z~działającego potoku (\texttt{run\_pipeline.sh}) i~ilustrują
+śledzenie w~różnych fazach gry. Wizualizacja zawiera odtworzony szkielet boiska, panel
+współrzędnych X/Y/Z oraz głębi $Z_{\text{cam}}$, oznaczenie bieżącego trybu pracy treku
+(\texttt{DETECTED} / \texttt{COASTING}) oraz rekonstruowaną trajektorię 3D piłki.
+\end{sloppypar}
 
-\subsection{Zarządzanie ryzykiem i techniki zabezpieczające}
-Na początku wspólnie wypisaliśmy wszystko, co — naszym zdaniem — mogło pójść nie
-tak, a następnie uporządkowaliśmy te zagrożenia w prostym rejestrze ryzyka. Każde
-z nich oceniliśmy pod kątem prawdopodobieństwa (P) i wpływu (W) w skali 1--5;
-iloczyn $P\!\times\!W$ wyznaczał priorytet reakcji. Dla ryzyk o najwyższym
-priorytecie z góry ustaliliśmy, co zrobimy — m.in. redundancję kompetencji,
-wczesną integrację oraz powtarzalne środowisko kontenerowe — tak, aby w razie
-problemu nie działać w pośpiechu.
-
-\begin{table}[H]
-\centering
-\caption{Rejestr ryzyka projektu (wybrane pozycje)}
-\renewcommand{\arraystretch}{1.25}
-\footnotesize
-\begin{tabularx}{\textwidth}{p{0.4cm} X c c c X}
-\toprule
-\rowcolor{rvHead}\textbf{\#} & \textbf{Ryzyko} & \textbf{P} & \textbf{W} & \textbf{P$\times$W} & \textbf{Reakcja / zabezpieczenie} \\
-\midrule
-R1 & Niedostępność jednego z członków zespołu & 3 & 4 & 12 &
-  Redundancja wiedzy (overlap ról), code review, dokumentacja na bieżąco. \\
-R2 & Problemy z integracją modułów (MQTT/HTTP/WS) & 4 & 4 & 16 &
-  Wczesna integracja „end-to-end”, wspólne kontrakty danych (Pydantic). \\
-R3 & Rozbieżność środowisk uruchomieniowych & 3 & 3 & 9 &
-  Konteneryzacja Docker Compose — identyczne środowisko dla obu osób. \\
-R4 & Błędna kalibracja progów klasyfikacji & 3 & 3 & 9 &
-  Parametryzacja progów, testy na danych odtwarzanych z plików CSV. \\
-R5 & Niedoszacowanie czasu na dokumentację & 4 & 3 & 12 &
-  Rozpoczęcie dokumentacji równolegle z implementacją (od~21.05). \\
-R6 & Utrata danych / brak kontroli wersji & 2 & 5 & 10 &
-  Repozytorium Git, częste commity, gałęzie funkcyjne. \\
-\bottomrule
-\end{tabularx}
-\normalsize
-\end{table}
+Rysunek~\ref{fig:ovl1} przedstawia fazę chwilowej utraty detekcji: mimo braku obserwacji
+piłki trek pozostaje aktywny w~trybie \texttt{COASTING}, a~filtr UKF utrzymuje estymatę
+położenia z~ograniczonym (przez mechanizm \emph{coast Z-fence}) przyrostem głębi.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=0.9]
-  % tło — każda komórka kolorowana wg iloczynu P×W
-  % (zielony: P×W<6, pomarańczowy: 6--12, czerwony: >12)
-  \foreach \P in {1,...,5}{
-    \foreach \W in {1,...,5}{
-      \pgfmathtruncatemacro{\prd}{\P*\W}
-      \edef\cc{\ifnum\prd<6 rvGreen\else\ifnum\prd<13 rvOrange\else rvRed\fi\fi}
-      \fill[\cc!16] (\P-1,\W-1) rectangle (\P,\W);
-    }
-  }
-  % siatka
-  \foreach \x in {0,...,5}{\draw[rvLight](\x,0)--(\x,5);}
-  \foreach \y in {0,...,5}{\draw[rvLight](0,\y)--(5,\y);}
-  % osie i skala
-  \draw[->, rvGray, line width=0.8pt] (0,0)--(5.7,0) node[right,font=\scriptsize]{Prawdop. (P)};
-  \draw[->, rvGray, line width=0.8pt] (0,0)--(0,5.7) node[above,font=\scriptsize]{Wpływ (W)};
-  \foreach \x in {1,...,5}{\node[font=\tiny,text=rvGray,below] at (\x-0.5,-0.05){\x};}
-  \foreach \y in {1,...,5}{\node[font=\tiny,text=rvGray,left]  at (-0.05,\y-0.5){\y};}
-  % punkty ryzyka — w środkach komórek, kolor zgodny ze strefą
-  \node[fill=rvRed,circle,inner sep=1.6pt,label={[font=\tiny]above:R2}] at (3.5,3.5){};
-  \node[fill=rvOrange,circle,inner sep=1.6pt,label={[font=\tiny]above:R1}] at (2.5,3.5){};
-  \node[fill=rvOrange,circle,inner sep=1.6pt,label={[font=\tiny]above:R5}] at (3.5,2.5){};
-  \node[fill=rvOrange,circle,inner sep=1.6pt,label={[font=\tiny]left:R6}]  at (1.5,4.5){};
-  \node[fill=rvOrange,circle,inner sep=1.6pt,label={[font=\tiny]above:R3}] at (2.33,2.5){};
-  \node[fill=rvOrange,circle,inner sep=1.6pt,label={[font=\tiny]above:R4}] at (2.67,2.5){};
-\end{tikzpicture}
-\caption{Macierz ryzyka — pozycjonowanie zagrożeń względem prawdopodobieństwa i wpływu
-  (kolor strefy odpowiada iloczynowi P$\times$W). W strefie krytycznej znalazło się
-  wyłącznie ryzyko R2.}
+\includegraphics[width=0.86\textwidth]{img/overlay_coasting.png}
+\caption{Wizualizacja śledzenia w fazie lotu z chwilową utratą detekcji: trek
+  pozostaje aktywny w trybie \texttt{COASTING}, panel HUD raportuje współrzędne 3D oraz
+  ograniczony przyrost głębi $\Delta Z_{\text{cam}}$.}
+\label{fig:ovl1}
 \end{figure}
 
-\noindent Rozkład zagrożeń odzwierciedla specyfikę dwuosobowego zespołu: większość
-ryzyk ma podwyższony wpływ, ponieważ każdy moduł i każda osoba są dla projektu
-kluczowe (brak rezerwy kadrowej). Mimo to tylko jedno ryzyko — trudności z
-integracją modułów (R2) — trafiło do strefy krytycznej; pozostałe, dzięki
-zaplanowanym z góry zabezpieczeniom, utrzymały się w strefie umiarkowanej.
-
-\subsection{Komunikacja i kontrola postępów}
-Komunikację w zespole oparto na krótkich, regularnych synchronizacjach oraz
-asynchronicznej wymianie informacji przez komunikator i komentarze w Pull
-Requestach. Postęp kontrolowano w cyklu tygodniowym, porównując stan faktyczny z
-planem (kamienie milowe). Pomagał w tym wzajemny przegląd kodu — żadna zmiana nie
-trafiała do gałęzi głównej bez akceptacji drugiej osoby, co przy okazji realizowało
-zabezpieczenie R1 (obie osoby orientowały się w całości projektu).
-
-Postęp śledziliśmy też prostym wykresem wypalania (burndown), porównującym
-pozostałą pracę z planem. Rysunek~\ref{fig:burndown} pokazuje, że tempo prac było
-zbliżone do planu, z niewielkim przyspieszeniem w ostatnim tygodniu.
+Rysunek~\ref{fig:ovl2} odpowiada fazie ataku: piłka porusza się z~wysoką prędkością,
+a~zrekonstruowana trajektoria 3D (krzywa balistyczna nad~siatką) jest zachowana mimo
+gwałtownej zmiany głębi obserwacji.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=1.0]
-  % osie
-  \draw[->, rvGray, line width=0.8pt] (0,0)--(11.5,0) node[right,font=\scriptsize]{tydzień};
-  \draw[->, rvGray, line width=0.8pt] (0,0)--(0,5.3) node[above,font=\scriptsize]{pozostała praca [dni]};
-  \foreach \x/\l in {0/0,2/1,4/2,6/3,8/4,10/5}{\draw(\x,2pt)--(\x,-2pt) node[below,font=\tiny]{\l};}
-  \foreach \y/\l in {0/0,1.25/9,2.5/18,3.75/27,5/36}{\draw(2pt,\y)--(-2pt,\y) node[left,font=\tiny]{\l};}
-  % linia idealna
-  \draw[rvGray, dashed, line width=1pt] (0,5)--(10,0);
-  \node[font=\tiny,text=rvGray] at (8.6,1.5){plan idealny};
-  % linia rzeczywista
-  \draw[rvBlue, line width=1.4pt] (0,5)--(2,4.2)--(4,3.4)--(6,2.5)--(8,1.4)--(10,0);
-  \foreach \p in {(0,5),(2,4.2),(4,3.4),(6,2.5),(8,1.4),(10,0)}{\fill[rvBlue]\p circle(2pt);}
-  \node[font=\tiny,text=rvBlue] at (3.2,3.9){realizacja};
-\end{tikzpicture}
-\caption{Wykres wypalania (burndown) — pozostała pracochłonność w kolejnych tygodniach.}
-\label{fig:burndown}
+\includegraphics[width=0.86\textwidth]{img/overlay_atak.png}
+\caption{Wizualizacja śledzenia w fazie ataku: zrekonstruowana krzywa balistyczna toru
+  piłki nad siatką przy szczytowej prędkości i szybkiej zmianie głębi.}
+\label{fig:ovl2}
 \end{figure}
 
-\begin{table}[H]
-\centering
-\caption{Plan komunikacji zespołowej}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{>{\bfseries}p{3.4cm} p{3.2cm} X}
-\toprule
-\rowcolor{rvHead}\textbf{Zdarzenie} & \textbf{Częstotliwość} & \textbf{Cel} \\
-\midrule
-Synchronizacja (stand-up) & 2--3 razy w tygodniu & Status, blokery, plan na kolejne dni. \\
-Przegląd kodu (PR review)  & Przy każdej zmianie & Kontrola jakości, transfer wiedzy. \\
-Przegląd iteracji          & Co tydzień         & Ocena przyrostu względem kamieni milowych. \\
-Retrospektywa              & Na koniec projektu & Wnioski na przyszłość. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+\subsection{Analiza ograniczeń}
+Pozostała granica dokładności dotyczy dalekiej strony boiska i~wynika wprost
+z~fundamentalnej natury geometrii jednokamerowej (wzór~2), a~nie z~doboru parametrów.
+W~tej strefie detektor zaniża rozmiar ramki, co~przekłada się na~systematyczne
+niedoszacowanie głębi; mechanizmy ochrony tłumią objawy (skoki, rozerwania treku), lecz
+nie usuwają samego źródła. Dalsze przesunięcie tej granicy wymaga zwiększenia pokrycia
+detektora (więcej danych uczących dla~dalekiego planu) lub lekkiej konfiguracji
+dwukamerowej w~strefie krytycznej — nie zaś dalszego strojenia filtra.
 
 %==============================================================================
-\section{Analiza wymagań i orientacja na użytkownika}
+\section{Uruchomienie i samodzielna weryfikacja}
 %==============================================================================
+Aby umożliwić niezależne sprawdzenie działania systemu na~dowolnym nagraniu meczu,
+cały potok ukryto za~jednym skryptem wejściowym \texttt{scripts/run\_pipeline.sh}.
+Skrypt reprodukuje referencyjny wynik z~zablokowaną konfiguracją (ochrona głębi,
+pułap detekcji 21~m, coast Z-fence) bez~ręcznego podawania kilkunastu parametrów.
 
-\subsection{Wymagania funkcjonalne}
-\begin{enumerate}[label=\textbf{F\arabic*.}, leftmargin=2.2em, itemsep=2pt]
-  \item System akwiruje dane z czujników pojazdu (akcelerometr, GPS, warunki).
-  \item System klasyfikuje stan nawierzchni do jednej z czterech kategorii.
-  \item System trwale zapisuje przetworzone dane w bazie danych.
-  \item System udostępnia dane w czasie rzeczywistym przez WebSocket.
-  \item Aplikacja kliencka prezentuje pozycję pojazdu i trasę na mapie.
-  \item Aplikacja oznacza wykryte ubytki na mapie ikonami (bez duplikatów).
-  \item Aplikacja prezentuje aktualne warunki pogodowe wraz z ikoną.
-\end{enumerate}
+\subsection{Wymagania środowiska}
+Do~uruchomienia potrzebny jest interpreter Python (zalecane środowisko \texttt{conda}
+o~nazwie \texttt{Volleyball\_diploma}) z~bibliotekami: \texttt{ultralytics} (YOLO26),
+\texttt{opencv-python}, \texttt{numpy}, \texttt{scipy} oraz \texttt{ffmpeg} do~zapisu
+overlay. Wagi modelu detekcji (\texttt{main\_model\_april.pt}) oraz pliki kalibracji
+sceny są~dołączone do~repozytorium. Obliczenia detekcji przyspiesza karta GPU, lecz
+potok działa również na~CPU (wolniej).
 
-\subsection{Wymagania niefunkcjonalne}
-\begin{enumerate}[label=\textbf{N\arabic*.}, leftmargin=2.2em, itemsep=2pt]
-  \item Wydajność: przetwarzanie strumieniowe z opóźnieniem
-        rzędu pojedynczych sekund.
-  \item Skalowalność: buforowanie i grupowanie zapisów (Redis, batch).
-  \item Przenośność: pełna konteneryzacja, uruchomienie jednym poleceniem.
-  \item Łatwość konfiguracji: obszar mapy i parametry jako zmienne
-        środowiskowe (np. zmiana z Kijowa na Rzeszów).
-  \item Utrzymywalność: architektura warstwowa (porty i adaptery).
-\end{enumerate}
+\subsection{Uruchomienie potoku}
+Najprostsze wywołanie wymaga jedynie ścieżki do~pliku wideo; opcjonalnie można podać
+nazwę artefaktów oraz przedział czasowy (w~sekundach), aby~przetworzyć krótki fragment:
+\begin{lstlisting}[style=sh]
+# Caly plik wideo:
+scripts/run_pipeline.sh mecz.mp4
 
-\subsection{Diagram przypadków użycia}
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  uc/.style={ellipse, draw=rvCyan, fill=rvLight, font=\scriptsize, align=center,
-             minimum width=2.7cm, minimum height=0.85cm},
-  actor/.style={font=\small\bfseries, text=rvBlue, align=center}]
-  % aktorzy
-  \node[actor](driver) at (0,2){\begin{tikzpicture}\draw[rvBlue,line width=1pt](0,0)circle(2.2mm);\draw[rvBlue,line width=1pt](0,-0.22)--(0,-0.7)(-0.25,-0.4)--(0.25,-0.4)(0,-0.7)--(-0.18,-1)(0,-0.7)--(0.18,-1);\end{tikzpicture}\\Pojazd\\(Agent)};
-  \node[actor](user) at (10,2){\begin{tikzpicture}\draw[rvBlue,line width=1pt](0,0)circle(2.2mm);\draw[rvBlue,line width=1pt](0,-0.22)--(0,-0.7)(-0.25,-0.4)--(0.25,-0.4)(0,-0.7)--(-0.18,-1)(0,-0.7)--(0.18,-1);\end{tikzpicture}\\Operator\\(użytkownik)};
-  % system box
-  \node[draw=rvGray, rounded corners, fit={(2.4,-1.6)(7.6,3.4)}, inner sep=10pt,
-        label={[font=\small\bfseries,text=rvGray]north:System RoadVision}](sys){};
-  \node[uc](u1) at (5,3){Wysłanie danych\\z czujników};
-  \node[uc](u2) at (5,1.9){Klasyfikacja\\nawierzchni};
-  \node[uc](u3) at (5,0.8){Zapis danych};
-  \node[uc](u4) at (5,-0.3){Podgląd mapy\\i trasy};
-  \node[uc](u5) at (5,-1.3){Podgląd\\pogody};
-  \draw[rvGray](driver)--(u1); \draw[rvGray](driver.south)to[bend right=10](u2);
-  \draw[rvGray](user)--(u4); \draw[rvGray](user.south)to[bend left=10](u5);
-\end{tikzpicture}
-\caption{Diagram przypadków użycia systemu RoadVision.}
-\end{figure}
-
-\subsection{Orientacja na użytkownika}
-Produkt zaprojektowano z myślą o końcowym odbiorcy — operatorze służb drogowych
-lub kierowcy. Decyzje projektowe podporządkowano czytelności: stan nawierzchni
-kodowany jest kolorem i ikoną, a nie wartością liczbową; trasa pojazdu jest
-rysowana na bieżąco; warunki pogodowe prezentowane są piktogramem zrozumiałym bez
-czytania. Zastosowano też mechanizm eliminacji duplikatów markerów (siatka
-przestrzenna), aby mapa pozostała czytelna nawet przy wielokrotnym przejeździe tą
-samą ulicą.
-
-%==============================================================================
-\section{Architektura i realizacja techniczna}
-%==============================================================================
-
-\subsection{Architektura systemu}
-RoadVision zbudowano w architekturze mikroserwisowej, w której każdy
-komponent realizuje pojedynczą odpowiedzialność i komunikuje się z pozostałymi
-przez jasno zdefiniowane interfejsy. Wewnętrznie moduły back-endowe zorganizowano
-zgodnie ze wzorcem portów i adapterów (architektura heksagonalna): logika
-domenowa (\texttt{usecases}, \texttt{entities}) jest niezależna od szczegółów
-technologii (\texttt{adapters}).
-
-\begin{figure}[H]
-\centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[node distance=1.05cm and 1.25cm]
-  \node[rvnode, fill=rvLight](agent){Agent\\\scriptsize akwizycja CSV};
-  \node[rvnode, right=of agent, fill=rvLightGreen, draw=rvGreen, text=rvGreen](edge){Edge\\\scriptsize klasyfikacja};
-  \node[rvnode, right=of edge, fill=rvLightOrange, draw=rvOrange, text=rvOrange](hub){Hub\\\scriptsize buforowanie};
-  \node[rvnode, right=of hub, fill=rvLight](store){Store\\\scriptsize API + DB};
-  \node[rvnode, right=of store](map){MapView\\\scriptsize wizualizacja};
-  % broker / infra
-  \node[draw=rvGray, dashed, rounded corners, above=0.7cm of edge, fill=white,
-        font=\scriptsize, inner sep=3pt](mqtt){MQTT (Mosquitto)};
-  \node[draw=rvGray, dashed, rounded corners, above=0.7cm of hub, fill=white,
-        font=\scriptsize, inner sep=3pt](redis){Redis};
-  \node[draw=rvGray, dashed, rounded corners, below=0.7cm of store, fill=white,
-        font=\scriptsize, inner sep=3pt](pg){PostgreSQL};
-  \draw[rvflow](agent)-- node[above,font=\tiny]{MQTT}(edge);
-  \draw[rvflow](edge)-- node[above,font=\tiny]{HTTP}(hub);
-  \draw[rvflow](hub)-- node[above,font=\tiny]{HTTP}(store);
-  \draw[rvflow](store)-- node[above,font=\tiny]{WebSocket}(map);
-  \draw[rvflow, dashed](agent.north)to[bend left=18](mqtt);
-  \draw[rvflow, dashed](mqtt)to[bend left=18](edge.north);
-  \draw[rvflow, dashed](hub.north)--(redis);
-  \draw[rvflow, dashed](store.south)--(pg);
-\end{tikzpicture}}
-\caption{Architektura mikroserwisowa RoadVision wraz z infrastrukturą pośredniczącą.}
-\label{fig:arch}
-\end{figure}
-
-\begin{table}[H]
-\centering
-\caption{Komponenty systemu, odpowiedzialności i wykonawca}
-\renewcommand{\arraystretch}{1.25}
-\footnotesize
-\begin{tabularx}{\textwidth}{>{\bfseries}p{1.9cm} p{3.3cm} X c}
-\toprule
-\rowcolor{rvHead}\textbf{Moduł} & \textbf{Technologie} & \textbf{Odpowiedzialność} & \textbf{Wykonawca} \\
-\midrule
-Agent   & Python, paho-mqtt & Odczyt danych z czujników (CSV), publikacja przez MQTT. & Roman \\
-Edge    & Python, paho-mqtt, Pydantic & Klasyfikacja stanu nawierzchni, przekazanie do Hub (HTTP). & Roman \\
-Hub     & FastAPI, Redis    & Buforowanie i grupowanie (batch) rekordów, przekazanie do Store. & Roman \\
-Store   & FastAPI, SQLAlchemy, PostgreSQL & Trwały zapis (CRUD) i rozsył w czasie rzeczywistym (WebSocket). & Rostysław \\
-MapView & Kivy, kivy-garden.mapview & Wizualizacja pozycji, trasy, ubytków i pogody na mapie. & Rostysław \\
-\bottomrule
-\end{tabularx}
-\normalsize
-\end{table}
-
-\subsection{Przepływ danych}
-Dane przepływają jednokierunkowo od pojazdu do interfejsu użytkownika. Rysunek
-\ref{fig:flow} przedstawia kolejne przekształcenia surowego odczytu czujnika w
-oznaczenie na mapie.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=0.55cm, font=\scriptsize,
-  flowstep/.style={rectangle, rounded corners=2pt, draw=rvBlue, fill=rvLight,
-               text width=2.55cm, align=center, minimum height=1.05cm}]
-  \node[flowstep](s1){Odczyt CSV\\akcel., GPS, warunki};
-  \node[flowstep, right=of s1](s2){Agregacja\\+ znacznik czasu};
-  \node[flowstep, right=of s2, fill=rvLightGreen, draw=rvGreen](s3){Klasyfikacja\\osi Z (Edge)};
-  \node[flowstep, right=of s3, fill=rvLightOrange, draw=rvOrange](s4){Bufor Redis\\(batch)};
-  \node[flowstep, below=0.7cm of s4](s5){Zapis\\PostgreSQL};
-  \node[flowstep, left=of s5](s6){Push\\WebSocket};
-  \node[flowstep, left=of s6](s7){Marker\\na mapie};
-  \draw[rvflow](s1)--(s2);\draw[rvflow](s2)--(s3);\draw[rvflow](s3)--(s4);
-  \draw[rvflow](s4)--(s5);\draw[rvflow](s5)--(s6);\draw[rvflow](s6)--(s7);
-\end{tikzpicture}
-\caption{Potok przetwarzania danych — od odczytu czujnika do markera na mapie.}
-\label{fig:flow}
-\end{figure}
-
-\subsection{Algorytm klasyfikacji nawierzchni}
-Sercem warstwy brzegowej jest reguła klasyfikująca stan drogi na podstawie
-odczytu osi \texttt{Z} akcelerometru. Wartość spoczynkowa (\texttt{NORMAL\_Z})
-wynosi 16384; odchylenie od niej interpretowane jest jako wyboj, dziura lub
-odcinek równy. Wartość zerowa traktowana jest jako gwałtowne zatrzymanie pojazdu.
-Moduł Edge, wraz z poprzedzającym go modułem Agent, przygotował Roman.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=0.7cm and 1.2cm, font=\scriptsize,
-  dec/.style={diamond, aspect=2, draw=rvCyan, fill=rvLight, align=center, inner sep=1pt},
-  res/.style={rectangle, rounded corners=2pt, draw, align=center, minimum width=2cm, minimum height=0.7cm}]
-  \node[dec](d0){z = 0?};
-  \node[res, right=2.2cm of d0, fill=rvGray!25](stop){gwałtowne\\hamowanie};
-  \node[dec, below=of d0](d1){odchylenie\\$\le -13500$?};
-  \node[res, right=2.2cm of d1, fill=rvOrange!25](bump){wyboj};
-  \node[dec, below=of d1](d2){odchylenie\\$\ge +2000$?};
-  \node[res, right=2.2cm of d2, fill=rvRed!25](pot){dziura};
-  \node[res, below=of d2, fill=rvGreen!25](smooth){równa};
-  \draw[rvflow](d0)-- node[above,font=\tiny]{tak}(stop);
-  \draw[rvflow](d0)-- node[left,font=\tiny]{nie}(d1);
-  \draw[rvflow](d1)-- node[above,font=\tiny]{tak}(bump);
-  \draw[rvflow](d1)-- node[left,font=\tiny]{nie}(d2);
-  \draw[rvflow](d2)-- node[above,font=\tiny]{tak}(pot);
-  \draw[rvflow](d2)-- node[left,font=\tiny]{nie}(smooth);
-\end{tikzpicture}
-\caption{Drzewo decyzyjne klasyfikacji stanu nawierzchni w module Edge.}
-\label{fig:classify}
-\end{figure}
-
-\begin{lstlisting}[style=py, caption={Reguła klasyfikacji nawierzchni (edge/app/usecases/data\_processing.py).}, captionpos=b]
-z = agent_data.accelerometer.z
-if z == 0:
-    return ProcessedAgentData(road_state="sudden_stop", agent_data=agent_data)
-
-NORMAL_Z = 16384
-deviation = z - NORMAL_Z
-lower_limit, upper_limit = -13500, 2000
-
-if lower_limit < deviation < upper_limit:
-    road_state = "smooth"
-elif deviation <= lower_limit:
-    road_state = "bump"
-else:
-    road_state = "pothole"
+# Tylko fragment 60-90 s, z wlasnym prefiksem nazwy:
+scripts/run_pipeline.sh mecz.mp4 test_atak 60 90
 \end{lstlisting}
+Skrypt wykonuje trzy etapy: (1)~detekcję YOLO26 i~śledzenie 3D IMM/UKF, (2)~obliczenie
+statystyk czasoprzestrzennych, (3)~render wizualizacji overlay. Render overlay można
+pominąć zmienną \texttt{NO\_OVERLAY=1} (sama analiza ilościowa).
 
-\subsection{Klasyfikacja warunków pogodowych}
-Niezależnie od stanu drogi system klasyfikuje warunki atmosferyczne na podstawie
-temperatury, wilgotności oraz flagi czujnika oblodzenia (ESP). Wynik prezentowany
-jest piktogramem w lewym górnym rogu mapy. Tę część — wraz z aplikacją MapView —
-zrealizował Rostysław.
-
-\begin{table}[H]
-\centering
-\caption{Reguły klasyfikacji warunków pogodowych}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{>{\bfseries}p{4.2cm} X}
-\toprule
-\rowcolor{rvHead}\textbf{Warunek} & \textbf{Kryterium} \\
-\midrule
-Śliska droga (ESP)        & flaga ESP = prawda \\
-Oblodzenie / mgła lodowa  & wilgotność $> 85\%$ i temperatura $< 2^{\circ}$C \\
-Mgła                      & wilgotność $> 85\%$ i temperatura $< 10^{\circ}$C \\
-Deszcz                    & wilgotność $> 85\%$ \\
-Pochmurno                 & wilgotność $> 70\%$ \\
-Częściowe zachmurzenie    & wilgotność $> 55\%$ \\
-Słonecznie                & pozostałe przypadki \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\subsection{Model danych}
-Przetworzone rekordy zapisywane są w pojedynczej tabeli relacyjnej
-\texttt{processed\_\allowbreak agent\_\allowbreak data}, łączącej stan drogi z
-odczytami czujników i pozycją GPS. Warstwę zapisu i udostępniania danych (moduł
-Store) przygotował Rostysław, natomiast pośredniczący moduł Hub — Roman.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[font=\footnotesize]
-  \node[rectangle, draw=rvBlue, fill=rvLight, align=left, inner sep=0pt] (t) {
-    \begin{minipage}{8.4cm}
-    \colorbox{rvGray}{\makebox[8.4cm][l]{\textcolor{white}{\bfseries\, processed\_agent\_data}}}\\[2pt]
-    \ttfamily\footnotesize
-    \underline{id} : SERIAL (PK) \\
-    road\_state : VARCHAR \\
-    user\_id : INTEGER \\
-    x, y, z : FLOAT \quad\textrm{(akcelerometr)}\\
-    latitude, longitude : FLOAT \quad\textrm{(GPS)}\\
-    temperature, humidity : FLOAT \\
-    esp : BOOL \\
-    timestamp : TIMESTAMP
-    \end{minipage}};
-\end{tikzpicture}
-\caption{Schemat tabeli \texttt{processed\_agent\_data} w bazie PostgreSQL.}
-\end{figure}
-
-\subsection{Konteneryzacja środowiska}
-Całe środowisko uruchomieniowe opisano w pliku \texttt{docker-compose.yaml}.
-Pojedyncze polecenie uruchamia osiem powiązanych usług, izolowanych w dedykowanych
-sieciach. Zapewnia to powtarzalność (realizacja zabezpieczenia R3) i ułatwia
-wdrożenie. Konfigurację konteneryzacji oraz wspólne repozytorium prowadził Roman.
-
-\begin{table}[H]
-\centering
-\caption{Usługi zdefiniowane w Docker Compose}
-\renewcommand{\arraystretch}{1.15}
-\footnotesize
-\begin{tabularx}{\textwidth}{>{\bfseries\ttfamily}p{2.4cm} p{3.2cm} X}
-\toprule
-\rowcolor{rvHead}\textbf{Usługa} & \textbf{Obraz} & \textbf{Rola} \\
-\midrule
-mqtt        & eclipse-mosquitto & Broker komunikatów MQTT. \\
-agent       & build ../agent    & Źródło danych z czujników. \\
-edge        & build ../edge     & Klasyfikacja brzegowa. \\
-redis       & redis             & Bufor kolejkowy dla Hub. \\
-hub         & build ../hub      & Grupowanie i przekazywanie danych. \\
-store       & build ../store    & API, baza danych, WebSocket. \\
-postgres\_db & postgres:16       & Trwałe składowanie danych. \\
-pgadmin     & dpage/pgadmin4    & Administracja bazą danych. \\
-\bottomrule
-\end{tabularx}
-\normalsize
-\end{table}
-
-%==============================================================================
-\section{Produkt końcowy i interfejs użytkownika}
-%==============================================================================
-
-\subsection{Wizualizacja na mapie}
-Aplikacja MapView, napisana w bibliotece Kivy, stanowi twarz produktu. Po
-nawiązaniu połączenia WebSocket prezentuje na mapie aktualną pozycję pojazdu
-(ikona samochodu), rysuje przebytą trasę oraz nanosi ikony wykrytych ubytków.
-Obszar wyświetlanej mapy jest parametrem konfiguracyjnym (zob.~wymaganie~N4).
-Rysunek~\ref{fig:mapmock}
-przedstawia szkic interfejsu (do zastąpienia zrzutem ekranu działającej
-aplikacji).
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-  % rama mapy
-  \fill[rvLight] (0,0) rectangle (12,7);
-  \draw[rvGray, line width=1pt] (0,0) rectangle (12,7);
-  % siatka ulic
-  \foreach \x in {1.5,3,...,11}{\draw[white, line width=2pt](\x,0)--(\x,7);}
-  \foreach \y in {1,2,...,6}{\draw[white, line width=2pt](0,\y)--(12,\y);}
-  \draw[rvGray!40,line width=3pt] (0,3.5) .. controls (4,4) and (8,2) .. (12,3);
-  % trasa
-  \draw[rvBlue, line width=2pt] (1.5,1.2) .. controls (4,2) and (6,5) .. (9,5.5);
-  % marker samochodu
-  \node[fill=rvBlue, circle, inner sep=3pt, label={[font=\scriptsize,text=rvBlue]above:pojazd}] at (9,5.5){};
-  % markery ubytków
-  \node[fill=rvRed, diamond, inner sep=2pt] at (3.4,2.0){};
-  \node[fill=rvOrange, diamond, inner sep=2pt] at (5.0,3.4){};
-  \node[fill=rvGray, diamond, inner sep=2pt] at (6.6,4.6){};
-  % widget pogody
-  \node[fill=black, opacity=0.6, rounded corners, minimum width=3cm, minimum height=1cm, anchor=north west] at (0.3,6.7){};
-  \node[anchor=north west, text=white, font=\scriptsize, align=left] at (0.45,6.55){Słonecznie\\ 18.5\,$^\circ$C \; 41\% RH};
-  % przycisk follow
-  \node[fill=rvGreen, rounded corners, text=white, font=\scriptsize, minimum width=2.4cm, anchor=north east] at (11.7,6.7){Śledzenie: WŁ.};
-  % legenda
-  \node[anchor=south west, font=\scriptsize] at (0.3,0.2){%
-    \tikz\node[fill=rvRed,diamond,inner sep=1.5pt]{}; dziura \quad
-    \tikz\node[fill=rvOrange,diamond,inner sep=1.5pt]{}; wyboj \quad
-    \tikz\node[fill=rvGray,diamond,inner sep=1.5pt]{}; hamowanie};
-\end{tikzpicture}
-\caption{Szkic interfejsu aplikacji MapView (mapa miasta, trasa, markery ubytków, widget pogody).}
-\label{fig:mapmock}
-\end{figure}
-
-\subsection{Prezentacja działającego interfejsu}
-Poniżej zamieszczono zrzuty ekranu z działającej aplikacji MapView, ilustrujące
-kluczowe funkcje produktu w trakcie testowego przejazdu.
-
-Jako obszar testowy do prezentacji wybrano Kijów, a nie docelowy Rzeszów.
-Zadecydowały o tym dwa względy praktyczne. Po pierwsze, gęstsza i bardziej
-zróżnicowana sieć drogowa Kijowa dostarcza znacznie więcej miejsc problematycznych
-(ubytków i nierówności), dzięki czemu działanie klasyfikatora można pokazać pełniej
-i na większej liczbie przypadków. Po drugie, dla tego obszaru dysponowaliśmy
-bogatszym zbiorem danych referencyjnych oraz narzędzi wspierających rozpoznawanie
-defektów; odpowiedników dopasowanych do potrzeb projektu dla Rzeszowa nie udało się
-pozyskać. Sam obszar mapy pozostaje przy tym parametrem konfiguracyjnym
-(wymaganie~N4), więc przełączenie wizualizacji na Rzeszów sprowadza się do zmiany
-współrzędnych środka mapy.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.82\textwidth]{images/4.jpg}
-\caption{Główny ekran aplikacji MapView: pozycja pojazdu, przebyta trasa oraz
-  markery wykrytych defektów (dziury, wyboje, gwałtowne hamowanie).}
-\label{fig:ss-overview}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\begin{minipage}[c]{0.6\textwidth}\centering
-  \includegraphics[width=\linewidth]{images/3.jpg}
-\end{minipage}\hfill
-\begin{minipage}[c]{0.36\textwidth}\centering
-  \includegraphics[width=\linewidth]{images/5.jpg}
-\end{minipage}
-\caption{Markery defektów na trasie — znak STOP (gwałtowne hamowanie), wyboje i
-  dziury (po lewej) oraz widget warunków pogodowych z piktogramem i odczytami
-  temperatury i wilgotności (po prawej).}
-\label{fig:ss-details}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.78\textwidth]{images/1.jpg}
-\caption{Tryb śledzenia pojazdu (Following: ON) — mapa automatycznie centruje się
-  na bieżącej pozycji pojazdu.}
-\label{fig:ss-follow}
-\end{figure}
-
-\subsection{Wybrane decyzje projektowe UX}
-\begin{itemize}[leftmargin=1.4em, itemsep=2pt]
-  \item Siatka przestrzenna (komórki ok.~30$\times$30~m) zapobiega
-        wielokrotnemu oznaczaniu tego samego ubytku przy ponownym przejeździe.
-  \item Tryb śledzenia pojazdu można włączać/wyłączać jednym przyciskiem.
-  \item Automatyczny reset trasy przy „przeskoku” GPS powyżej 500~m
-        zapobiega rysowaniu nieprawdziwych, długich odcinków.
+\subsection{Wyniki i interpretacja}
+Po~zakończeniu w~katalogu \texttt{runs/} powstają trzy artefakty (z~prefiksem nazwy
+przebiegu):
+\begin{itemize}[leftmargin=1.4em, itemsep=2pt, topsep=2pt]
+  \item \texttt{*\_tracks.jsonl} --- pełna trajektoria 3D klatka po~klatce (pozycja
+        $X,Y,Z$, głębia kamery, tryb treku);
+  \item \texttt{*\_stats.json} --- zagregowane statystyki czasoprzestrzenne epizodu;
+  \item \texttt{*\_overlay.mp4} --- nagranie z~naniesionym szkieletem boiska, panelem
+        współrzędnych oraz~rekonstruowaną trajektorią piłki.
 \end{itemize}
-
-%==============================================================================
-\section{Testowanie i weryfikacja}
-%==============================================================================
-Weryfikację prowadzono na danych odtwarzanych z plików CSV, co zapewniło
-powtarzalność scenariuszy. Testy obejmowały zarówno poprawność klasyfikacji, jak i
-działanie całego potoku „od końca do końca”.
-
-\begin{table}[H]
-\centering
-\caption{Wybrane scenariusze testowe}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{c X p{3.6cm} c}
-\toprule
-\rowcolor{rvHead}\textbf{\#} & \textbf{Scenariusz} & \textbf{Oczekiwany wynik} & \textbf{Status} \\
-\midrule
-T1 & Odczyt akcelerometru w normie & Stan „równa” & \textcolor{rvGreen}{OK} \\
-T2 & Duże ujemne odchylenie osi Z & Stan „wyboj” & \textcolor{rvGreen}{OK} \\
-T3 & Dodatnie odchylenie osi Z & Stan „dziura” & \textcolor{rvGreen}{OK} \\
-T4 & Odczyt z $=0$ & „gwałtowne hamowanie” & \textcolor{rvGreen}{OK} \\
-T5 & Pełny potok Agent$\rightarrow$MapView & Marker na mapie & \textcolor{rvGreen}{OK} \\
-T6 & Ponowny przejazd tą samą ulicą & Brak duplikatu markera & \textcolor{rvGreen}{OK} \\
-\bottomrule
-\end{tabularx}
-\end{table}
+Plik overlay pozwala wzrokowo zweryfikować poprawność: trajektoria powinna podążać za~piłką,
+panel HUD raportować sensowne współrzędne, a~znacznik trybu przełączać się na~\texttt{COASTING}
+przy~chwilowym zaniku detekcji (jak na~rys.~\ref{fig:ovl1} oraz~\ref{fig:ovl2}).
 
 %==============================================================================
 \section{Podsumowanie i wnioski}
 %==============================================================================
 
 \subsection{Realizacja celów}
-Wszystkie założone wymagania funkcjonalne zostały zrealizowane: powstał kompletny,
-działający potok przetwarzania danych — od akwizycji w pojeździe, przez
-klasyfikację brzegową i trwały zapis, po wizualizację w czasie rzeczywistym na
-mapie miasta. Projekt ukończono w zaplanowanym oknie czasowym (05.05--09.06.2026).
+Zbudowano kompletny, działający potok monokularnej analizy gry w~siatkówkę: od~detekcji
+piłki siecią YOLO26m, przez rekonstrukcję 3D (model kamery otworkowej, kalibracja PnP
+i~rzutowanie wsteczne), po~wielomodelową filtrację (IMM + UKF) i~śledzenie w~przestrzeni
+3D (\texttt{IMMTracker}). Wszystkie wymagania funkcjonalne zostały zrealizowane, a~system
+działa na~pojedynczym strumieniu wideo z~kamery klasy konsumenckiej, mieszcząc się
+w~założonym budżecie sprzętowym i~czasowym.
 
-\subsection{Wnioski z pracy zespołowej}
-Najważniejszym wnioskiem jest skuteczność wczesnej integracji oraz
-redundancji kompetencji jako technik zabezpieczających. Dzięki
-zbudowaniu szkieletu „end-to-end” na wczesnym etapie zespół wykrył problemy
-interfejsów (najwyżej ocenione ryzyko R2) zanim stały się kosztowne. Konteneryzacja
-wyeliminowała klasę błędów „u mnie działa”. Elastyczny podział obowiązków pomiędzy
-przedmiotami pozwolił efektywnie wykorzystać mocne strony obu członków zespołu.
-Zastosowane techniki — WBS, wykres Gantta, analiza ścieżki krytycznej, rejestr
-ryzyka i macierz RACI — okazały się adekwatne nawet dla małego zespołu i znacząco
-zwiększyły przewidywalność prac.
+\subsection{Wnioski}
+Najważniejszym wnioskiem inżynierskim jest to, że~o~jakości monokularnego śledzenia 3D
+decyduje nie sam dobór filtra, lecz świadome przeciwdziałanie degeneracji głębi. Zespół
+mechanizmów ochrony głębi (anizotropowy model szumu pomiaru, bramki rozdzielające
+innowację boczną i~głębinową, fizyczne ograniczniki predykcji) zredukował liczbę
+nierealnych skoków głębi z~30 do~1 oraz przełączeń identyfikatora z~19 do~3 na~epizod,
+przy~zachowaniu zerowego błędu bocznego. Potwierdza to~tezę, że~architekturę monokularną
+można doprowadzić do~praktycznej użyteczności, o~ile świadomie modeluje się jej
+ograniczenia, zamiast je~ignorować. Zastosowane techniki — bezpochodna filtracja UKF,
+przełączanie modeli ruchu IMM oraz dwustopniowa asocjacja w~metryce 3D — okazały się
+adekwatne do~specyfiki szybkiej, wielofazowej gry.
 
 \subsection{Kierunki rozwoju}
 \begin{itemize}[leftmargin=1.4em, itemsep=2pt]
-  \item Zastąpienie odtwarzania z CSV strumieniem z rzeczywistego urządzenia IoT.
-  \item Uczenie maszynowe do klasyfikacji nawierzchni zamiast progów stałych.
-  \item Agregacja danych od wielu pojazdów (mapa zbiorcza dla miasta).
-  \item Wersja webowa lub mobilna aplikacji MapView.
+  \item Rozszerzenie pokrycia detektora dla dalekiej strony boiska (więcej danych uczących).
+  \item Lekka konfiguracja dwukamerowa dla triangulacji głębi w strefie krytycznej.
+  \item Automatyczne rozpoznawanie typów akcji (zagrywka, atak, blok) na bazie profilu IMM.
+  \item Eksport statystyki gry do interaktywnego panelu trenerskiego.
 \end{itemize}
 
 %==============================================================================
 \addcontentsline{toc}{section}{Bibliografia}
 \begin{thebibliography}{9}
-\bibitem{pmbok} Project Management Institute, \emph{A Guide to the Project
-  Management Body of Knowledge (PMBOK Guide)}, wyd.~6, PMI, 2017.
-\bibitem{kerzner} H.~Kerzner, \emph{Project Management: A Systems Approach to
-  Planning, Scheduling, and Controlling}, Wiley, 2017.
-\bibitem{fastapi} S.~Ramírez, \emph{FastAPI — dokumentacja oficjalna}.
-  \url{https://fastapi.tiangolo.com}
-\bibitem{mqtt} OASIS, \emph{MQTT Version 3.1.1 — specyfikacja protokołu}, 2014.
-\bibitem{redis} \emph{Redis — dokumentacja}. \url{https://redis.io/docs}
-\bibitem{postgres} \emph{PostgreSQL 16 — dokumentacja}.
-  \url{https://www.postgresql.org/docs/16/}
-\bibitem{kivy} \emph{Kivy — Cross-platform Python Framework}.
-  \url{https://kivy.org}
-\bibitem{docker} \emph{Docker Compose — dokumentacja}.
-  \url{https://docs.docker.com/compose/}
-\bibitem{cockburn} A.~Cockburn, \emph{Hexagonal Architecture (Ports and
-  Adapters)}, 2005.
+\bibitem{yolo} J.~Redmon i~in., \emph{You Only Look Once: Unified, Real-Time Object
+  Detection}, CVPR, 2016.
+\bibitem{ultra} \emph{Ultralytics YOLO — dokumentacja}. \url{https://docs.ultralytics.com}
+\bibitem{bytetrack} Y.~Zhang i~in., \emph{ByteTrack: Multi-Object Tracking by
+  Associating Every Detection Box}, ECCV, 2022.
+\bibitem{ukf} S.~J.~Julier, J.~K.~Uhlmann, \emph{Unscented Filtering and Nonlinear
+  Estimation}, Proceedings of the IEEE, 2004.
+\bibitem{imm} H.~A.~P.~Blom, Y.~Bar-Shalom, \emph{The Interacting Multiple Model
+  Algorithm for Systems with Markovian Switching Coefficients}, IEEE TAC, 1988.
+\bibitem{hz} R.~Hartley, A.~Zisserman, \emph{Multiple View Geometry in Computer
+  Vision}, Cambridge University Press, 2004.
+\bibitem{opencv} \emph{OpenCV — dokumentacja (Camera Calibration, solvePnP)}.
+  \url{https://docs.opencv.org}
+\bibitem{filterpy} R.~Labbe, \emph{FilterPy — Kalman and Bayesian Filters in Python}.
+  \url{https://filterpy.readthedocs.io}
 \end{thebibliography}
 
 \newpage
