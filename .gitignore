@@ -2,11 +2,13 @@
 __pycache__/
 *.py[codz]
 *$py.class
-./.idea
 
 # video
 *.mp4
 *.avi
+
+# extra
+.idea/
 
 # C extensions
 *.so

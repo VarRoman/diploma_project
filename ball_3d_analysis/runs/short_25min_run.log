@@ -1,0 +1,5 @@
+[i] video=Japan_vs_Poland_short.mp4 fps=50.000 dt=0.02000s frames=[0,7317) total=7317 1920x1080
+[i] Завантажую YOLO model: ../training_models/models/main_model_april.pt
+[ok] Готово за 809.2s. detect=4698 used=4440 reject_floor=83 reject_ceiling=0 reject_oob=33 reject_trunc=95
+     final_tracks=[]
+     out -> runs/short_25min_tracks.jsonl
