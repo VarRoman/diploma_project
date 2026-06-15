@@ -1,0 +1,1311 @@
+%==============================================================================
+%  System przestrzennej analizy gry w siatkówkę z wykorzystaniem uczenia
+%  maszynowego — Sprawozdanie z realizacji projektu (Seminarium dyplomowe).
+%  Strona tytułowa oraz formatowanie wzorowane na układzie WSIiZ.
+%==============================================================================
+\documentclass[14pt,a4paper]{extarticle}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[polish]{babel}
+\usepackage{newtxtext}   % Times New Roman (tekst)
+\usepackage{newtxmath}   % Times New Roman (matematyka)
+\usepackage[a4paper,margin=2.4cm]{geometry}
+
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{indentfirst}
+
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{3em}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit,
+                backgrounds, decorations.pathreplacing, trees}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+
+\usepackage[hidelinks]{hyperref}
+\shorthandoff{"}
+
+%-------------------------- Paleta stonowana (techniczna) --------------------
+\definecolor{vbInk}{HTML}{2B3A48}
+\definecolor{vbBlue}{HTML}{34495E}
+\definecolor{vbCyan}{HTML}{5B6B7A}
+\definecolor{vbGreen}{HTML}{6B7480}
+\definecolor{vbOrange}{HTML}{7A7368}
+\definecolor{vbRed}{HTML}{7A4A45}
+\definecolor{vbGray}{HTML}{5D6D7E}
+\definecolor{vbLight}{HTML}{EEF1F3}
+\definecolor{vbHead}{HTML}{DDE1E4}
+
+%-------------------------------- Nagłówki -----------------------------------
+\titleformat{\section}{\color{black}\Large\bfseries}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\color{black}\large\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\color{black}\normalsize\bfseries}{\thesubsubsection.}{0.5em}{}
+\setcounter{tocdepth}{3}
+\setcounter{secnumdepth}{0}
+
+% Ręczna numeracja zgodna z układem seminaryjnym (rozdziały i podpunkty).
+\newcommand{\rozdzial}[1]{\clearpage\section*{#1}\addcontentsline{toc}{section}{#1}}
+\newcommand{\podrozdz}[1]{\subsection*{#1}\addcontentsline{toc}{subsection}{#1}}
+\newcommand{\podpodrozdz}[1]{\subsubsection*{#1}\addcontentsline{toc}{subsubsection}{#1}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{vbGray}Analiza przestrzenna gry w siatkówkę}
+\fancyhead[R]{\small\color{vbGray}WSIiZ}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\captionsetup{font={small,it}, labelfont={bf}, labelsep=period,
+              justification=centering, singlelinecheck=true}
+
+%-------------------------------- Listingi -----------------------------------
+\definecolor{codebg}{HTML}{F7F8F9}
+\definecolor{codekw}{HTML}{34495E}
+\definecolor{codestr}{HTML}{5D6D7E}
+\definecolor{codecom}{HTML}{8C95A0}
+\lstdefinestyle{sh}{
+  language=bash,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw},
+  commentstyle=\color{codecom}\itshape,
+  frame=single, rulecolor=\color{vbLight},
+  breaklines=true, showstringspaces=false,
+  columns=fullflexible, tabsize=2,
+}
+
+% Powściągliwe style bloków schematów.
+\tikzset{
+  vbnode/.style={rectangle, rounded corners=2pt, draw=vbInk, line width=0.7pt,
+                 fill=vbLight, text=vbInk, font=\small, align=center,
+                 minimum width=2.4cm, minimum height=1cm},
+  vbflow/.style={-{Stealth[length=2.4mm]}, line width=0.8pt, color=vbGray},
+}
+
+%==============================================================================
+\begin{document}
+
+%--------------------------- STRONA TYTUŁOWA (wzór WSIiZ) ---------------------
+\begin{titlepage}
+\centering
+\vspace*{0.4cm}
+\includegraphics[width=0.5\textwidth]{img/wsiiz_logo.png}\\[1.3cm]
+
+{\large KOLEGIUM INFORMATYKI STOSOWANEJ}\\[1.1cm]
+
+{\normalsize Kierunek: Informatyka}\\[0.22cm]
+{\normalsize Specjalność: Inżynieria danych}\\[0.22cm]
+{\normalsize Przedmiot: Seminarium dyplomowe}\\[0.22cm]
+{\normalsize Prowadzący: dr inż. Leszek Gajecki}\\[0.22cm]
+{\normalsize Wykonał: Roman Bezshchasnyi}\\[0.22cm]
+{\normalsize Nr Albumu: 69930}\\[1.6cm]
+
+{\LARGE\bfseries System przestrzennej analizy\\[0.2cm]
+gry w siatkówkę z wykorzystaniem\\[0.2cm]
+uczenia maszynowego}\\[1.0cm]
+
+\vfill
+
+{\large Rzeszów, 15.06.2026}
+\end{titlepage}
+
+%--------------------------------- SPIS TREŚCI -------------------------------
+{\small
+\setlength{\parskip}{0pt}
+\tableofcontents
+\par}
+\thispagestyle{fancy}
+
+%==============================================================================
+\rozdzial{Wstęp}
+%==============================================================================
+Współczesny sport profesjonalny coraz silniej opiera się na~analizie danych. W~siatkówce
+--- jednej z~najszybszych gier zespołowych na~świecie --- prędkość piłki podczas ataku
+przekracza 130~km/h, a~pojedyncze fazy gry trwają ułamki sekundy. W~takich warunkach
+klasyczna obserwacja „okiem trenera” oraz proste systemy dwuwymiarowej rejestracji wideo
+nie~są już w~stanie dostarczyć obiektywnego, ilościowego materiału do~analizy
+taktyczno-technicznej. Automatyczne pozyskiwanie metryk kinematycznych --- trójwymiarowej
+trajektorii lotu piłki, współrzędnych punktów odbicia, kątów ataku oraz prędkości
+szczytowej --- pozwala obiektywnie oceniać skuteczność działań zawodników, modelować
+zachowanie przeciwnika i~optymalizować biomechanikę ruchów podczas treningu.
+
+Niniejsze sprawozdanie dokumentuje zaprojektowany i~zbudowany kompleks
+programowo-algorytmiczny, który odtwarza trójwymiarową trajektorię piłki na~podstawie
+\emph{jednego} strumienia wideo z~kamery klasy konsumenckiej. System stanowi działające,
+zasadniczo ukończone rozwiązanie inżynierskie; jednocześnie --- ze~względu na~modułową
+architekturę i~zidentyfikowane granice geometrii jednokamerowej --- pozostaje naturalną
+bazą do~dalszej rozbudowy, którą autor zamierza kontynuować w~ramach kolejnych prac.
+Dokument przedstawia całość w~uporządkowanej formie: motywację i~uzasadnienie wyboru
+tematu, cele oraz zakres, podstawy teoretyczne, architekturę i~realizację techniczną,
+a~na~końcu wyniki weryfikacji eksperymentalnej i~kierunki dalszego rozwoju. Świadomie
+ograniczono liczbę pełnych wyprowadzeń matematycznych --- przytoczono jedynie te
+zależności, które są niezbędne do~zrozumienia zasady działania oraz obiektywnych
+ograniczeń systemu.
+
+%==============================================================================
+\rozdzial{1. Uzasadnienie wyboru tematu}
+%==============================================================================
+Wybór tematu wynika ze~spotkania dwóch obszarów, które autor uznaje za~kluczowe dla~swojej
+specjalności --- inżynierii danych: praktycznej analityki danych sportowych oraz
+przetwarzania strumieni wizyjnych metodami uczenia maszynowego. Sport zespołowy generuje
+ogromne ilości danych ruchowych, jednak ich pozyskanie w~formie metrycznej (a~nie
+wyłącznie obrazowej) jest nietrywialne. To~właśnie etap transformacji surowego obrazu
+w~wiarygodny, trójwymiarowy zbiór danych kinematycznych stanowi rdzeń problematyki
+inżynierii danych zawartej w~projekcie.
+
+Istniejące rozwiązania komercyjne (np.~Hawk-Eye czy~Foxtenn) dostarczają takiej analizy,
+są jednak systemami zamkniętymi o~wysokim koszcie wdrożenia, wymagającymi instalacji
+od~10 do~20 zsynchronizowanych, szybkoklatkowych kamer przemysłowych rozmieszczonych
+wzdłuż całego obwodu hali. Czyni je~to~praktycznie niedostępnymi dla~lig amatorskich,
+szkółek sportowych oraz klubów średniego szczebla. Powstaje zatem wyraźna potrzeba
+opracowania przystępnego, lokalnego i~architektonicznie elastycznego systemu wizji
+komputerowej, zdolnego do~trójwymiarowego śledzenia i~analizy parametrów gry na~podstawie
+ograniczonej liczby źródeł obrazu --- aż~do~pojedynczej kamery klasy konsumenckiej,
+np.~współczesnego smartfona.
+
+O~atrakcyjności tematu decyduje również jego trudność naukowo-techniczna. Zadanie leży
+na~styku trzech dziedzin: głębokiego uczenia (detekcja małego, szybkiego obiektu),
+geometrii rzutowej (kalibracja przestrzeni) oraz teorii optymalnej filtracji i~estymacji
+stanu (kompensacja szumów pomiaru). Rezygnacja z~kosztownej stereoskopii w~zamian
+za~konieczność rozwiązania trudnego problemu monokularnej rekonstrukcji głębi jest
+celowym, ekonomicznie uzasadnionym kompromisem --- i~zarazem źródłem najciekawszego
+wyzwania inżynierskiego całego projektu. Temat został wybrany także dlatego, że~projekt
+jest już zrealizowany w~działającej postaci, co~pozwala oprzeć sprawozdanie na~realnych
+wynikach pomiarowych, a~nie wyłącznie na~założeniach koncepcyjnych.
+
+%==============================================================================
+\rozdzial{2. Cel główny i cele szczegółowe pracy}
+%==============================================================================
+Aby proces budowy systemu przebiegał w~sposób uporządkowany, konieczne było sformułowanie
+konkretnych celów technicznych. Precyzują one zakres niezbędnych prac badawczych
+i~programistycznych oraz pozwalają jednoznacznie zweryfikować, czy stworzone rozwiązanie
+spełnia swoje zadanie.
+
+\podrozdz{2.1. Cel główny pracy}
+Głównym celem pracy było zaprojektowanie, zbudowanie oraz przetestowanie kompletnego
+potoku programowo-algorytmicznego, który na~podstawie \emph{pojedynczego} strumienia wideo
+odtwarza trójwymiarową trajektorię piłki siatkowej oraz wylicza jej parametry
+kinematyczne. Realizacja tego założenia ma~udowodnić, że~przy świadomym modelowaniu
+ograniczeń geometrii jednokamerowej możliwe jest osiągnięcie praktycznie użytecznej
+dokładności śledzenia 3D bez~kosztownej infrastruktury wielokamerowej.
+
+\podrozdz{2.2. Cele szczegółowe pracy}
+Osiągnięcie celu głównego wymagało zrealizowania szeregu powiązanych ze~sobą zadań
+cząstkowych:
+\begin{itemize}[leftmargin=1.4em, itemsep=2pt]
+  \item dobór i~donauczanie bezkotwicowej sieci detekcji obiektów rodziny YOLO
+        (model YOLO26m) do~niezawodnego wykrywania małej, szybkiej piłki;
+  \item zbudowanie modelu kamery otworkowej, kalibracja parametrów zewnętrznych metodą
+        PnP oraz przejście z~pikseli do~metrów przez rzutowanie wsteczne (Ray Casting);
+  \item implementacja sigma-punktowego filtra Kalmana (UKF) zdolnego do~filtracji
+        nieliniowego, balistycznego ruchu piłki;
+  \item osadzenie filtra w~architekturze współpracujących modeli wielokrotnych (IMM)
+        obsługującej wielofazowy charakter gry;
+  \item adaptacja algorytmu śledzenia ByteTrack do~przestrzeni 3D (\texttt{IMMTracker})
+        z~asocjacją w~metryce Mahalanobisa;
+  \item opracowanie mechanizmów ochrony oszacowania głębi przed degeneracją monokularną;
+  \item przeprowadzenie weryfikacji eksperymentalnej oraz przygotowanie wizualizacji
+        overlay potwierdzającej działanie systemu.
+\end{itemize}
+
+%==============================================================================
+\rozdzial{3. Zakres projektu inżynierskiego}
+%==============================================================================
+Zakres pracy obejmuje cały proces tworzenia systemu --- od~analizy dziedziny i~przeglądu
+metod, poprzez projekt architektury i~implementację potoku przetwarzania, aż~po~weryfikację
+eksperymentalną na~rzeczywistym materiale meczowym. W~warstwie danych projekt obejmuje
+zbudowanie i~ręczne rozmieczenie zbioru uczącego (ok.~14~000 obrazów), donauczenie modelu
+detekcji oraz przetwarzanie strumieni wideo do~postaci ustrukturyzowanych, metrycznych
+trajektorii 3D zapisywanych w~formacie nadającym się do~dalszej analizy danych.
+
+W~obszarze oprogramowania zakres prac obejmuje implementację wszystkich ogniw potoku:
+detektora, modułu kalibracji i~rekonstrukcji 3D, jądra filtracji UKF/IMM oraz trackera 3D,
+a~także skryptu integrującego, ukrywającego cały potok za~jednym punktem wejścia. Wynikiem
+działania systemu są trzy artefakty: pełna trajektoria 3D (klatka po~klatce), zagregowane
+statystyki czasoprzestrzenne epizodu oraz nagranie z~naniesioną wizualizacją śledzenia.
+
+Ważnym aspektem definiującym ramy projektu jest określenie jego wykluczeń. System
+zaprojektowano i~zweryfikowano dla~\emph{pojedynczej, nieruchomej} kamery obejmującej całe
+boisko --- świadomie zrezygnowano ze~stereoskopii oraz konfiguracji wielokamerowej.
+Praca nie~obejmuje również analizy gry w~czasie rzeczywistym podczas transmisji na~żywo
+ani~automatycznej klasyfikacji typów akcji; skupia się na~wiarygodnym odtworzeniu
+trajektorii 3D z~materiału nagranego. Te~wykluczenia wyznaczają jednocześnie naturalne
+kierunki przyszłej rozbudowy, omówione w~podsumowaniu, które autor traktuje jako możliwy
+temat kolejnej pracy dyplomowej.
+
+%==============================================================================
+\rozdzial{4. Układ pracy}
+%==============================================================================
+Sprawozdanie podzielono na~trzy zasadnicze rozdziały, które w~logiczny sposób prowadzą
+przez cały proces powstawania systemu. W~rozdziale~pierwszym wprowadzono czytelnika
+w~specyfikę siatkówki jako celu śledzenia, dokonano przeglądu metod detekcji obiektów oraz
+metod śledzenia i~filtracji, a~następnie szczegółowo omówiono kluczowe wyzwanie projektu
+--- degenerację głębi monokularnej --- i~na~tej podstawie sformułowano wymagania.
+
+Rozdział~drugi stanowi opis architektury i~realizacji technicznej. Przedstawiono w~nim
+potokowy przepływ danych oraz kolejne ogniwa systemu: detektor YOLO26m, model kamery
+i~kalibrację PnP, rzutowanie wsteczne, filtrację UKF, architekturę IMM, tracker 3D oraz
+oryginalny zespół mechanizmów ochrony głębi. Rozdział~trzeci poświęcono wynikom
+eksperymentalnym i~weryfikacji: omówiono metodykę walidacji, jakość detekcji, stabilność
+śledzenia 3D, analizę trybów IMM, prezentację działania systemu, analizę ograniczeń oraz
+sposób samodzielnego uruchomienia potoku. Całość zamyka podsumowanie zestawiające
+osiągnięte rezultaty z~pierwotnymi celami oraz wskazujące kierunki dalszego rozwoju.
+
+%==============================================================================
+\rozdzial{Rozdział 1. Teoretyczne podstawy analizy ruchu i metod śledzenia}
+%==============================================================================
+Projektowanie systemu wizyjnego zdolnego do~trójwymiarowej analizy gry wymaga oparcia się
+na~rzetelnym rozpoznaniu specyfiki przedmiotu badań oraz dostępnych metod. Niniejszy
+rozdział charakteryzuje siatkówkę jako szczególnie wymagający cel śledzenia, dokonuje
+przeglądu metod detekcji obiektów oraz metod śledzenia i~filtracji, a~następnie omawia
+kluczowe wyzwanie całego projektu --- degenerację głębi monokularnej --- i~na~tej podstawie
+formułuje wymagania funkcjonalne i~niefunkcjonalne.
+
+\podrozdz{1.1. Specyfika siatkówki jako celu śledzenia}
+Choć śledzenie piłki sportowej pozornie przypomina inne zadania wizji komputerowej,
+siatkówka ma kilka cech, które tworzą sztywny zbiór wymagań wobec systemu. Bez~ich
+uwzględnienia nawet teoretycznie poprawny potok przetwarzania może osiągać nieakceptowalną
+jakość na~realnym materiale.
+
+\textbf{Tryby szybkościowe.} Zgodnie z~przepisami międzynarodowej federacji FIVB masa piłki
+wynosi 260--280~g, co~przekłada się na~bardzo szeroki zakres prędkości liniowych w~grze:
+przyjęcie 0,5--3~m/s, wystawienie 4--8~m/s, zagrywka szybująca 13--17~m/s, zagrywka
+z~wyskoku 24--32~m/s, a~atak 30--42~m/s (wartości rekordowe sięgają 40--47~m/s). Przy
+typowej częstotliwości 30--50~FPS oznacza to, że~między dwiema kolejnymi klatkami piłka
+może przemieścić się o~0,6--1,4~m. Algorytmy opierające asocjację na~przestrzennej
+bliskości kolejnej detekcji (bramkowanie z~małym promieniem) w~fazie ataku praktycznie
+gwarantują utratę treku. Formułuje to~wymóg dynamicznego promienia bramkowania.
+
+\textbf{Wiele modeli ruchu w~jednym epizodzie.} W~odróżnieniu od~np.~tenisa, gdzie piłka
+między dwoma uderzeniami zawsze porusza się balistycznie, typowy epizod siatkarski składa
+się z~5--9 interakcji kontaktowych (zagrywka, przyjęcie, wystawienie, atak, blok, obrona),
+z~których każda natychmiast zmienia zarówno moduł, jak~i~kierunek wektora prędkości.
+Nieciągłych przyśpieszeń w~momencie kontaktu nie~da się opisać jednym modelem ruchu ---
+to~bezpośrednio motywuje przejście do~architektury współpracujących modeli wielokrotnych
+(IMM), która pozwala równolegle utrzymywać kilka hipotez o~bieżącym trybie dynamiki.
+
+\textbf{Pionowa gęstość sceny.} Użyteczna przestrzeń robocza analizy lotu sięga 9--10~m
+wysokości, podczas gdy boisko ma jedynie 9$\times$18~m. Szerokość sceny jest mniejsza niż
+połowa jej wysokości --- to~przykład zadania 3D o~bardzo małym współczynniku proporcji.
+Wyklucza to~zastosowanie płaskich podejść homograficznych, ponieważ nawet niewielki błąd
+wyznaczenia wysokości ($\pm$0,5~m) potrafi całkowicie zmienić interpretację taktyczną
+akcji (np.~odróżnić wystawienie „nad siatką” od~ataku „ponad blokiem”).
+
+\textbf{Oświetlenie i~artefakty optyczne.} Oświetlenie profesjonalnych hal łączy zwykle
+górne światło reflektorowe (LED 5000--6500~K) z~cieplejszym podświetleniem trybun
+(3500--4500~K). Generuje to~dwa pasożytnicze efekty krytyczne dla~detekcji: refleksy
+spekularne na~połyskliwej powłoce piłki (jasna plama o~zmiennym rozmiarze, która podczas
+ataku potrafi przewyższyć ciemną część piłki) oraz podwójne cienie na~podłodze (przy
+szybkim ruchu wizualnie przypominają dodatkową piłkę, generując fałszywe detekcje). Efekty
+te~bezpośrednio motywują agresywną augmentację zbioru uczącego.
+
+\podrozdz{1.2. Przegląd metod detekcji obiektów}
+Ewolucja detektorów obiektów przebiegła od~dwuetapowych architektur typu R-CNN (osobna
+sieć propozycji regionów RPN i~osobny klasyfikator), przez ich szybsze warianty, aż~do~
+jednoetapowych modeli rodziny YOLO (\emph{You Only Look Once}), które w~pojedynczym
+przejściu sieci jednocześnie lokalizują i~klasyfikują obiekty. Dla~zadania pracującego
+w~budżecie zbliżonym do~czasu rzeczywistego jednoetapowość jest decydująca: dwuetapowe
+detektory, mimo wysokiej dokładności, nie~mieszczą się w~napiętym budżecie latencji.
+Współczesne, bezkotwicowe (anchor-free) warianty YOLO eliminują ponadto konieczność
+ręcznego doboru kotwic, co~upraszcza detekcję obiektu o~silnie zmiennym widzialnym
+rozmiarze --- a~taka właśnie jest piłka oddalająca się w~głąb sceny. Z~tych względów
+do~projektu wybrano model YOLO26m.
+
+\podrozdz{1.3. Przegląd metod śledzenia i filtracji}
+Warstwa śledzenia wymaga dwóch komponentów: asocjacji danych (przypisania detekcji
+do~treków) oraz filtracji stanu (wygładzania trajektorii i~predykcji). Dla~asocjacji
+klasyczne podejścia (SORT) opierają się na~metryce IoU, zawodnej dla~małego, szybkiego
+obiektu; nowszy ByteTrack wprowadza dwustopniową asocjację, wykorzystując także detekcje
+o~niskiej pewności, co~znacząco poprawia ciągłość treku. Dla~filtracji rozważono kilka
+rodzin metod; ich porównanie zestawiono w~tabeli~\ref{tab:filtry}.
+
+\begin{table}[H]
+\centering
+\caption{Porównanie metod filtracji trajektorii dla rozważanego zadania}
+\label{tab:filtry}
+\renewcommand{\arraystretch}{1.3}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\bfseries}p{2.6cm} X X}
+\toprule
+\rowcolor{vbHead}\textbf{Metoda} & \textbf{Zalety} & \textbf{Ograniczenia} \\
+\midrule
+Filtr Kalmana (KF) & Optymalny i tani obliczeniowo dla układów liniowych. &
+  Tylko liniowe; przy aerodynamice nieliniowej akumuluje błąd dynamiczny. \\
+Rozszerzony KF (EKF) & Obsługuje nieliniowość przez linearyzację (jakobiany). &
+  Wymaga analitycznych pochodnych; skłonny do rozbieżności na stromych zakrętach. \\
+Sigma-punktowy KF (UKF) & Bezpochodny; dokładność rzędu 3.~rzędu Taylora; stabilny dla ruchu parabolicznego. &
+  Nieco droższy od KF (propagacja zbioru punktów sigma). \\
+Filtr cząsteczkowy (PF) & Obsługuje rozkłady niegaussowskie i multimodalne. &
+  Wymaga $\sim$2000 cząstek; degeneracja wag i resampling --- wielokrotny koszt obliczeń. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent Ruch piłki jest silnie nieliniowy: siła oporu powietrza zależy od~kwadratu
+prędkości ($F_d \propto v^2$), co~eliminuje liniowy KF, a~analityczne wyprowadzenie
+jakobianów dla~modelu balistycznego z~oporem i~efektem Magnusa jest niezwykle uciążliwe
+i~niestabilne (EKF). Filtr cząsteczkowy, choć teoretycznie najogólniejszy, nie~mieści się
+w~budżecie obliczeniowym. Wybrano zatem UKF jako najlepszy kompromis dokładności
+i~kosztu, osadzając go~w~architekturze IMM.
+
+\podrozdz{1.4. Degeneracja głębi monokularnej --- kluczowe wyzwanie}
+\label{sec:degen}
+Wybór konfiguracji jednokamerowej ma~fundamentalną cenę, którą należy uświadomić sobie
+już na~etapie analizy, ponieważ to~właśnie ona wyznacza zasadniczą granicę osiągalnej
+dokładności całego systemu. W~odróżnieniu od~stereoskopii, gdzie głębię daje triangulacja
+dwóch promieni, konfiguracja monokularna odtwarza odległość wzdłuż jednego promienia
+optycznego na~podstawie cechy pośredniej --- widzialnego rozmiaru pikselowego obiektu.
+Głębię wylicza się z~podobieństwa trójkątów modelu kamery otworkowej:
+\begin{equation}
+Z_c = \frac{f \cdot D}{w},
+\end{equation}
+gdzie $f$~--~ogniskowa w~pikselach, $D$~--~fizyczna średnica piłki, $w$~--~pikselowa
+szerokość ramki detekcji. Zasadnicza wada tej zależności ujawnia się po~zróżniczkowaniu
+głębi względem mierzonego rozmiaru ramki:
+\begin{equation}
+\frac{\partial Z_c}{\partial w} = -\,\frac{f \cdot D}{w^{2}}.
+\end{equation}
+Czułość głębi na~błąd rozmiaru ramki rośnie odwrotnie kwadratowo wraz ze~zmniejszaniem
+$w$, czyli gwałtownie zaostrza się z~odległością. Jeśli dla~piłki w~strefie bliskiej błąd
+jednego piksela szerokości ramki daje przesunięcie głębi rzędu 0,14~m, to~na~dalekiej
+granicy przestrzeni roboczej (ok.~60~m) ten~sam jednopikselowy szum przekłada się już
+na~ok.~2,3~m. Ponieważ detektor neuronowy obiektywnie generuje drżenie ramki na~poziomie
+1--2~px nawet w~sprzyjających warunkach (a~podczas rozmycia ruchowego znacznie większe),
+odtworzona głębia na~dalekim planie staje się zasadniczo niepewną wielkością.
+
+Ta~monokularna degeneracja głębi jest korzeniem wszystkich dalszych trudności
+inżynierskich: zawyżonych pików prędkości chwilowej, niefizycznych „rozerwań” trajektorii
+oraz systematycznego niedoszacowania współrzędnych dalekiej strony boiska. Walka z~nią
+staje się centralnym zadaniem naukowo-technicznym projektu (zob.~podrozdz.~\ref{sec:ochrona}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=12cm, height=5.4cm,
+  xlabel={odległość do kamery $Z_c$ [m]},
+  ylabel={$|\partial Z_c/\partial w|$ [m/px]},
+  xmin=0, xmax=62, ymin=0, ymax=2.6,
+  xtick={0,10,20,30,40,50,60},
+  grid=both, grid style={vbLight},
+  every axis label/.style={font=\small}, tick label style={font=\footnotesize},
+  axis lines=left,
+]
+\addplot[vbInk, very thick, domain=4:60, samples=80] {0.00064*x*x};
+\addplot[vbRed, dashed, thick] coordinates {(60,0)(60,2.6)};
+\node[font=\scriptsize, text=vbRed, anchor=east] at (axis cs:59,2.2) {strefa zawodności głębi};
+\node[font=\scriptsize, text=vbGray, anchor=west] at (axis cs:6,0.45) {strefa wiarygodna ($\approx$0,14 m/px)};
+\end{axis}
+\end{tikzpicture}
+\caption{Czułość odtworzonej głębi na jednopikselowy szum ramki rośnie odwrotnie
+  kwadratowo z odległością --- źródło systematycznej niepewności na dalekim planie.}
+\label{fig:depth}
+\end{figure}
+
+\podrozdz{1.5. Wymagania funkcjonalne i niefunkcjonalne}
+Na~podstawie powyższej analizy sformułowano wymagania zestawione w~tabeli~\ref{tab:wym}.
+
+\begin{table}[H]
+\centering
+\caption{Najważniejsze wymagania stawiane systemowi}
+\label{tab:wym}
+\renewcommand{\arraystretch}{1.25}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\bfseries}p{1.3cm} X}
+\toprule
+\rowcolor{vbHead}\textbf{Nr} & \textbf{Wymaganie} \\
+\midrule
+F1 & Niezawodna detekcja małej piłki, odporna na rozmycie ruchowe i artefakty optyczne. \\
+F2 & Kalibracja kamery po punktach referencyjnych boiska (PnP) i rzutowanie wsteczne detekcji do metrycznej przestrzeni 3D. \\
+F3 & Wielomodelowa filtracja trajektorii (IMM + UKF) z tłumieniem wysokoczęstotliwościowego drżenia. \\
+F4 & Asocjacja danych w metryce 3D, odporna na przełączanie identyfikatorów na kontrastowych zakłóceniach. \\
+F5 & Ochrona oszacowania głębi przed degeneracją monokularną. \\
+F6 & Obliczenie statystyki gry oraz wygenerowanie wideo-overlay. \\
+\midrule
+N1 & Łączna latencja przetwarzania klatki $\le 1/\text{FPS}$ (ok.~20~ms przy 50~FPS). \\
+N2 & Działanie na typowym sprzęcie z jedną konsumencką kartą graficzną (CUDA), bez akceleratorów serwerowych. \\
+N3 & Stabilność przy długich przerwach detekcji (okluzja piłki) i nagłym pojawieniu się obiektu. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent Budżet czasowy jest napięty: z~ok.~20~ms na~klatkę 8--12~ms zużywa inferencja
+sieci YOLO26, co~pozostawia jedynie 8--12~ms na~całą resztę potoku (dekoder wideo,
+rzutowanie wsteczne, trekowanie, wizualizacja). To~uzasadnia wybór UKF --- operacje
+na~9-wymiarowym wektorze stanu bez~ciężkich inwersji macierzy wysokiej wymiarowości ---
+zamiast np.~filtra cząsteczkowego z~tysiącami cząstek.
+
+%==============================================================================
+\rozdzial{Rozdział 2. Architektura i realizacja systemu}
+%==============================================================================
+Rozdział przedstawia praktyczną realizację systemu: od~ogólnego, potokowego przepływu
+danych, przez kolejne ogniwa przetwarzania, aż~po~oryginalny zespół mechanizmów ochrony
+głębi, stanowiący najważniejszy wkład inżynierski projektu.
+
+\podrozdz{2.1. Architektura potoku przetwarzania}
+System ma~budowę potokową: dane przepływają jednokierunkowo od~klatki wideo do~metrycznej
+trajektorii i~statystyki gry, ze~sprzężeniem zwrotnym predykcji filtra do~przetwarzania
+kolejnej klatki. Każdy moduł realizuje pojedynczą, jasno wydzieloną odpowiedzialność,
+co~ułatwia testowanie i~strojenie poszczególnych ogniw niezależnie. Ogólny przepływ
+przedstawia rysunek~\ref{fig:pipeline}, a~odpowiedzialności komponentów --- tabela~\ref{tab:moduly}.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=0.6cm and 0.9cm]
+  \node[vbnode](frame){Klatka\\\scriptsize wideo};
+  \node[vbnode, right=of frame](yolo){YOLO26m\\\scriptsize detekcja};
+  \node[vbnode, right=of yolo](ray){PnP + Ray\\\scriptsize casting 3D};
+  \node[vbnode, right=of ray](imm){IMM / UKF\\\scriptsize filtracja};
+  \node[vbnode, right=of imm](track){IMMTracker\\\scriptsize asocjacja 3D};
+  \node[vbnode, below=1.0cm of track](state){Stan 9D\\\scriptsize poz./prędk./przysp.};
+  \node[vbnode, left=of state](stat){Statystyka\\\scriptsize gry};
+  \node[vbnode, left=of stat](ovl){Wideo-\\overlay};
+  \draw[vbflow](frame)--(yolo); \draw[vbflow](yolo)-- node[above,font=\tiny]{$u,v,w$}(ray);
+  \draw[vbflow](ray)-- node[above,font=\tiny]{$X,Y,Z$}(imm);
+  \draw[vbflow](imm)--(track); \draw[vbflow](track)--(state);
+  \draw[vbflow](state)--(stat); \draw[vbflow](stat)--(ovl);
+  \draw[vbflow, dashed](track.north)to[out=90,in=90, looseness=1.4]
+        node[above,font=\tiny,pos=0.5]{predykcja $t{+}1$}(imm.north);
+\end{tikzpicture}}
+\caption{Potok przetwarzania --- od klatki wideo do trajektorii 3D, statystyki i overlay.}
+\label{fig:pipeline}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Komponenty programowe systemu}
+\label{tab:moduly}
+\renewcommand{\arraystretch}{1.2}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\bfseries\ttfamily\scriptsize}p{4.8cm} X}
+\toprule
+\rowcolor{vbHead}\textbf{Moduł} & \textbf{Odpowiedzialność} \\
+\midrule
+model\_train\_remote.py        & Donauczanie i walidacja modelu YOLO26m (chmura, GPU). \\
+get\_court\_position\_methods.py & Kalibracja PnP i rzutowanie wsteczne pikseli do przestrzeni 3D. \\
+IMM\_UKF.py                     & Jądro filtracji: sigma-punktowy UKF i modele ruchu (CV/CA/uderzenie). \\
+IMMTracker.py                  & Śledzenie 3D (ByteTrack), bramkowanie, ochrona głębi, coasting. \\
+run\_pipeline.sh               & Pojedynczy punkt wejścia uruchamiający cały potok. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\podrozdz{2.2. Detekcja piłki --- YOLO26m}
+Pierwszym ogniwem potoku jest bezkotwicowa sieć konwolucyjna YOLO26m~\cite{yolo,ultra},
+dobrana ze~względu na~korzystny stosunek dokładności do~latencji. Aby~poprawić wykrywanie małego obiektu ---
+piłka zajmuje na~klatce niekiedy zaledwie kilkanaście pikseli --- zwiększono rozmiar tensora
+wejściowego do~\texttt{imgsz}=1088, co~zachowuje więcej szczegółów wysokiej częstotliwości
+kosztem nieznacznie dłuższej inferencji.
+
+Model donauczono na~zbiorze ok.~14~000 obrazów zorganizowanym w~7~podzbiorów. Około~8~000
+obrazów pozyskano z~istniejących źródeł, natomiast ok.~6~000 rozmieczono ręcznie z~własnych
+nagrań meczowych --- łączny nakład anotacji przekroczył 25~godzin. Tak~duży udział danych
+własnych był konieczny, ponieważ publiczne zbiory rzadko zawierają piłkę w~stanie silnego
+rozmycia ruchowego, typowego dla~fazy ataku. W~konfiguracji uczenia zastosowano agresywną
+augmentację (biblioteka Albumentations~\cite{albumentations}) odwzorowującą realne artefakty
+hal sportowych: symulowane rozmycie ruchowe
+(MotionBlur), wyrównanie histogramu (CLAHE) oraz losowe zaburzenia jasności, kontrastu
+i~nasycenia (RandomBrightnessContrast, HueSaturation). Dzięki temu detektor uczy się
+rozpoznawać piłkę mimo refleksów spekularnych i~zmiennego konturu.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{img/yolo_detekcje.jpg}
+\caption{Przykładowe detekcje piłki przez model YOLO26m na klatkach walidacyjnych
+  (rzeczywiste warunki hali, rozmycie ruchowe).}
+\label{fig:yolo}
+\end{figure}
+
+\podrozdz{2.3. Model kamery i kalibracja PnP}
+Przejście z~pikseli do~metrów opiera się na~modelu kamery otworkowej. Rzut punktu sceny
+$\mathbf{X}=(X,Y,Z)$ na~piksel $(u,v)$ opisuje zależność:
+\begin{equation}
+s\begin{bmatrix} u \\ v \\ 1 \end{bmatrix}
+= K\,[\,R \mid t\,]\begin{bmatrix} X \\ Y \\ Z \\ 1 \end{bmatrix}, \qquad
+K = \begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix},
+\end{equation}
+gdzie $K$~--~macierz parametrów wewnętrznych (ogniskowe $f_x,f_y$ i~punkt główny
+$c_x,c_y$), a~$[R \mid t]$~--~parametry zewnętrzne (obrót i~przesunięcie kamery względem
+układu hali)~\cite{hz,zhangcalib}. Parametry zewnętrzne wyznacza się, rozwiązując zadanie
+perspektywy $n$ punktów (PnP) za~pomocą funkcji \texttt{solvePnP}~\cite{opencv}:
+na~obrazie wskazuje się kilka punktów
+referencyjnych o~znanych współrzędnych metrycznych (narożniki i~przecięcia linii boiska),
+a~algorytm dopasowuje pozę kamery minimalizującą błąd reprojekcji. Kalibracja wykonywana
+jest jednorazowo dla~danego ujęcia.
+
+Formalnie pozę $(R,t)$ wyznacza się jako minimum sumy kwadratów odległości między
+zaobserwowanymi pikselami $(u_i,v_i)$ a~reprojekcją znanych punktów $\mathbf{X}_i$:
+\begin{equation}
+(R^\star, t^\star) = \arg\min_{R,t}\;\sum_{i=1}^{n}
+\bigl\lVert\, (u_i,v_i) - \pi\bigl(K\,(R\mathbf{X}_i + t)\bigr) \bigr\rVert^2,
+\end{equation}
+gdzie $\pi(\cdot)$~--~rzut perspektywiczny (dzielenie przez współrzędną głębi). Zadanie
+to~jest nieliniowe ze~względu na~obrót $R$, dlatego rozwiązuje się je~iteracyjnie metodą
+Levenberga--Marquardta~\cite{lm}. Dla~czterech punktów referencyjnych (narożniki i~przecięcia linii
+boiska) optymalizacja zbiega po~8--15 iteracjach do~błędu reprojekcji RMSE poniżej~1{,}5~px,
+co~odpowiada dokładności poniżej kilku centymetrów w~przestrzeni boiska.
+
+Szczególnej uwagi wymaga dobór macierzy wewnętrznej $K$, gdyż transmisyjne nagranie nie~jest
+opatrzone metadanymi optycznymi. Punkt główny przyjęto w~środku kadru
+($c_x=960$,~$c_y=540$ dla~rozdzielczości $1920\times1080$), natomiast ogniskową dobrano
+\emph{kryterium grawitacyjnym}: spośród kandydatów wybrano taką wartość $f_x=f_y$, dla~której
+odtworzone z~rekonstrukcji 3D przyśpieszenie pionowe piłki w~fazie wolnego lotu jest
+najbliższe rzeczywistemu przyśpieszeniu ziemskiemu. Procedura ta~wskazała
+$f_x=f_y\approx5805$~px (wstępne, błędne oszacowanie rzędu~1300~px dawało nierealistyczne
+$g_{\text{odt}}$), przy~którym odtworzona wartość mieści się w~przedziale $9{,}0$--$9{,}2$~m/s${}^2$.
+Fizyka lotu staje się tu~niezależnym, darmowym wzorcem kalibracji geometrycznej.
+
+\podrozdz{2.4. Rzutowanie wsteczne i rekonstrukcja 3D}
+Mając pozę kamery, dla~każdej detekcji buduje się promień optyczny biegnący od~środka
+optycznego przez piksel $(u,v)$ (Ray Casting). Sama informacja o~kierunku promienia nie
+wystarcza jednak do~określenia położenia piłki --- potrzebna jest jeszcze odległość wzdłuż
+promienia, czyli głębia, którą szacuje się z~pikselowego rozmiaru ramki według wzoru~(1).
+Połączenie kierunku promienia z~oszacowaną głębią daje pełne położenie $(X,Y,Z)$
+w~metrycznym układzie hali. Dodatkowy mechanizm inwersji bazy osi dostosowuje orientację
+układu współrzędnych do~konwencji przyjętej w~modelu balistycznym filtra. W~ten sposób
+płaska detekcja~2D zostaje przekształcona w~punkt przestrzeni trójwymiarowej
+(rys.~\ref{fig:court}).
+
+Formalnie kierunek promienia w~układzie kamery uzyskuje się przez odwrócenie macierzy
+wewnętrznej, a~następnie obraca do~układu świata:
+\begin{equation}
+\mathbf{d}_{\text{cam}} = K^{-1}\begin{bmatrix} u \\ v \\ 1 \end{bmatrix}, \qquad
+\mathbf{d}_{\text{world}} = R^{\!\top}\mathbf{d}_{\text{cam}}, \qquad
+\mathbf{C} = -R^{\!\top}t,
+\end{equation}
+gdzie $\mathbf{C}$~--~środek optyczny kamery w~układzie hali. Położenie piłki leży wówczas
+na~półprostej parametryzowanej głębią $Z_c$ wzdłuż~osi optycznej:
+\begin{equation}
+\mathbf{P}(Z_c) = \mathbf{C} + Z_c\,\mathbf{d}_{\text{world}}, \qquad
+Z_c = \frac{f\,D}{w},
+\end{equation}
+gdzie $w$~--~pikselowa szerokość ramki detekcji, a~$D$~--~efektywna średnica piłki
+(przyjęto $D=0{,}27$~m). Wzór~$Z_c=fD/w$ wynika z~podobieństwa trójkątów modelu otworkowego
+i~stanowi jedyne źródło informacji o~głębi w~układzie monokularnym --- to~właśnie jego
+wrażliwość jest źródłem degeneracji opisanej w~podrozdz.~\ref{sec:degen}.
+
+Ostatnim krokiem jest uzgodnienie orientacji osi: surowy układ kamery odwraca zwrot
+osi pionowej względem konwencji modelu balistycznego, dlatego stosuje się macierz inwersji
+bazy $M_{\text{align}}=\mathrm{diag}(1,-1,1)$, dającą $\mathbf{P}_{\text{boisko}}=(X,-Y,Z)$.
+Po~tej transformacji wektor grawitacji przyjmuje postać $\hat{\mathbf{g}}=(0,-9{,}81,0)^{\!\top}$,
+zgodną z~kierunkiem „w~dół” w~przestrzeni hali, co~umożliwia bezpośrednią weryfikację
+fizyczną odtworzonej dynamiki pionowej.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0, font=\footnotesize]
+  % boisko w perspektywie
+  \fill[vbLight] (0,0) -- (8,0) -- (9.6,1.5) -- (1.6,1.5) -- cycle;
+  \draw[vbInk, thick] (0,0) -- (8,0) -- (9.6,1.5) -- (1.6,1.5) -- cycle;
+  \draw[vbGray] (4,0) -- (5.6,1.5);
+  \node[font=\scriptsize, text=vbGray] at (4.8,0.45) {boisko 9$\times$18 m};
+  % kamera (srodek optyczny C)
+  \node[vbnode, minimum width=1.5cm, minimum height=0.7cm] (cam) at (-0.1,4.1) {kamera};
+  \node[font=\scriptsize, text=vbInk, anchor=north] at (cam.south) {środek $\mathbf{C}$};
+  % pilka P(Zc)
+  \coordinate (B) at (6.3,3.0);
+  \node[fill=vbGray, circle, inner sep=2.5pt] (ball) at (B) {};
+  \node[font=\scriptsize, text=vbInk, anchor=south west] at (6.45,3.05) {piłka $\mathbf{P}(Z_c)$};
+  % promien optyczny (kierunek d)
+  \draw[vbflow, vbInk, line width=0.9pt] (cam.east) -- (B);
+  \node[font=\scriptsize, text=vbInk, anchor=south, rotate=-11] at (3.1,3.66)
+        {promień optyczny, kierunek $\mathbf{d}$};
+  \node[font=\scriptsize, text=vbGray, anchor=north, rotate=-11] at (2.7,3.18)
+        {głębia $Z_c = fD/w$};
+  % wysokosc nad boiskiem
+  \draw[vbGray, dashed] (B) -- (6.3,1.2);
+  \node[font=\scriptsize, text=vbGray, anchor=west] at (6.42,2.1) {wysokość $\le$ 9--10 m};
+\end{tikzpicture}
+\caption{Rzutowanie wsteczne: piłka leży na promieniu optycznym o kierunku $\mathbf{d}$,
+  a jej położenie $\mathbf{P}(Z_c)=\mathbf{C}+Z_c\mathbf{d}$ wyznacza głębia $Z_c=fD/w$
+  szacowana z pikselowego rozmiaru ramki.}
+\label{fig:court}
+\end{figure}
+
+\podrozdz{2.5. Filtracja --- sigma-punktowy filtr Kalmana (UKF)}
+Surowa trajektoria 3D jest zaszumiona drżeniem ramki i~podlega nieliniowej aerodynamice.
+Zastosowano sigma-punktowy filtr Kalmana~\cite{kalman,ukf}, który zamiast
+linearyzacji (jak EKF) propaguje przez nieliniowe równania ruchu mały, deterministyczny
+zbiór punktów sigma. Punkty te~
+dobiera się tak, aby~dokładnie odwzorowały średnią i~kowariancję wejściowego rozkładu:
+\begin{equation}
+\mathcal{X}_0 = \hat{x}, \qquad
+\mathcal{X}_i = \hat{x} \pm \left(\sqrt{(n+\lambda)\,P}\right)_i, \qquad
+\lambda = \alpha^2 (n+\kappa) - n,
+\end{equation}
+gdzie $n$~--~wymiar stanu, a~$\alpha,\beta,\kappa$~--~parametry rozrzutu sterujące tym, jak
+daleko od~średniej rozkłada się chmura punktów sigma. Po~przepuszczeniu punktów przez
+funkcję nieliniową ruchu $f(\cdot)$ średnią i~kowariancję transformowanego rozkładu
+odtwarza się ważonym sumowaniem (krok predykcji):
+\begin{equation}
+\hat{x}^- = \sum_{i=0}^{2n} W_i^{(m)}\,\mathcal{X}_i^{\,*}, \qquad
+P^- = \sum_{i=0}^{2n} W_i^{(c)}\,(\mathcal{X}_i^{\,*}-\hat{x}^-)(\mathcal{X}_i^{\,*}-\hat{x}^-)^{\!\top} + Q,
+\end{equation}
+gdzie $\mathcal{X}_i^{\,*}=f(\mathcal{X}_i)$, a~wagi $W^{(m)}$ i~$W^{(c)}$ (dla~średniej i~kowariancji)
+wynikają z~parametrów $\lambda,\alpha,\beta$. Gdy~napłynie nowa detekcja, punkty sigma rzutuje
+się modelem pomiaru $h(\cdot)$ do~przestrzeni obserwacji i~wyznacza innowację oraz jej
+kowariancję $S$ wraz z~kowariancją skrośną $P_{xz}$. Korekta przebiega według klasycznych
+równań Kalmana ze~wzmocnieniem $K$:
+\begin{equation}
+K = P_{xz}\,S^{-1}, \qquad
+\hat{x} = \hat{x}^- + K\,(z - \hat{z}^-), \qquad
+P = P^- - K\,S\,K^{\!\top},
+\end{equation}
+gdzie $z$~--~bieżący pomiar (zrekonstruowana pozycja 3D), a~$\hat{z}^-$~--~jego predykcja.
+Filtr jest bezpochodny (nie~wymaga jakobianów) i~osiąga dokładność co~najmniej~2.~rzędu
+rozwinięcia Taylora dla~rozkładów gaussowskich, zachowując stabilność na~stromych zakrętach
+trajektorii (moment uderzenia), gdzie linearyzacja EKF rozbiega się. Wektor stanu jest
+9-wymiarowy --- położenie, prędkość i~przyśpieszenie w~trzech osiach $(x,y,z)$ --- co~pozwala
+modelować lot balistyczny z~oporem powietrza bez~zewnętrznych założeń o~kształcie toru.
+Pełny cykl filtra --- od~wygenerowania punktów sigma, przez nieliniową propagację, aż~po~korektę
+kalmanowską --- przedstawia rysunek~\ref{fig:ukf}.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=0.5cm and 0.85cm, font=\footnotesize,
+  ukf/.style={rectangle, rounded corners=2pt, draw=vbInk, fill=vbLight, text=vbInk,
+              text width=2.5cm, align=center, minimum height=1.05cm}]
+  \node[ukf](state){Stan $\hat{x},P$};
+  \node[ukf, right=of state](sig){Punkty sigma\\\scriptsize $\mathcal{X}_i$ (19)};
+  \node[ukf, right=of sig](pred){Propagacja\\\scriptsize $f(\cdot)$ + opór};
+  \node[ukf, right=of pred](prior){Predykcja\\\scriptsize $\hat{x}^-,P^-$};
+  \node[ukf, below=0.9cm of prior](meas){Model pomiaru\\\scriptsize $h(\cdot)$, $S$, $P_{xz}$};
+  \node[ukf, left=of meas](corr){Korekcja\\\scriptsize $K=P_{xz}S^{-1}$};
+  \node[ukf, left=of corr](post){Stan po\\korekcji $\hat{x},P$};
+  \draw[vbflow](state)--(sig); \draw[vbflow](sig)--(pred);
+  \draw[vbflow](pred)--(prior); \draw[vbflow](prior)--(meas);
+  \draw[vbflow](meas)-- node[above,font=\tiny]{innowacja $z-\hat{z}^-$}(corr);
+  \draw[vbflow](corr)--(post);
+  \draw[vbflow, dashed](post.north)to[out=90,in=90, looseness=1.1]
+        node[above,font=\tiny,pos=0.5]{kolejna klatka}(state.north);
+\end{tikzpicture}}
+\caption{Cykl sigma-punktowego filtra Kalmana (UKF): generacja punktów sigma, nieliniowa
+  predykcja z modelem oporu, a następnie kalmanowska korekcja pomiarem.}
+\label{fig:ukf}
+\end{figure}
+
+Macierz $Q$ opisuje szum procesu (niepewność modelu ruchu), a~macierz $R$ --- szum pomiaru.
+Kluczowym usprawnieniem dla~zadania monokularnego jest \emph{anizotropowa} macierz $R$:
+ponieważ oś głębi $Z$ jest rekonstruowana znacznie mniej pewnie niż~współrzędne boczne
+(zob.~podrozdz.~\ref{sec:degen}), wariancję pomiaru wzdłuż~$Z$ zwiększa się względem~osi
+$X,Y$, a~przy~dużych, niefizycznych skokach głębi dodatkowo ją~inflatuje. Dzięki temu filtr
+„ufa” stabilnym współrzędnym bocznym, a~zaszumioną głębię wygładza, co~ogranicza
+charakterystyczne dla~monokularu drgania toru wzdłuż~osi optycznej. Symetria i~dodatnia
+określoność macierzy kowariancji są~wymuszane numerycznie po~każdym kroku, aby~zapobiec
+degeneracji filtra w~długich epizodach.
+
+\podpodrozdz{2.5.1. Punkty sigma i~wagi}
+Dla~$n$-wymiarowego stanu konstruuje się $2n+1$ punktów sigma (przy~$n=9$ daje to~19~punktów).
+Ich wagi --- osobne dla~rekonstrukcji średniej $W^{(m)}$ i~kowariancji $W^{(c)}$ --- wynoszą:
+\begin{equation}
+\begin{aligned}
+W_0^{(m)} &= \frac{\lambda}{n+\lambda}, \qquad
+W_0^{(c)} = \frac{\lambda}{n+\lambda} + (1-\alpha^2+\beta), \\[2pt]
+W_i^{(m)} &= W_i^{(c)} = \frac{1}{2(n+\lambda)}, \qquad i=1,\dots,2n.
+\end{aligned}
+\end{equation}
+Przyjęto bezwymiarowe parametry rozrzutu $\alpha=10^{-3}$, $\beta=2$ (optymalne dla~rozkładów
+gaussowskich) oraz $\kappa=0$. Pierwiastek macierzowy $\sqrt{(n+\lambda)P}$ liczy się
+rozkładem Cholesky'ego, co~jest numerycznie stabilne, o~ile $P$ pozostaje dodatnio określona.
+
+\podpodrozdz{2.5.2. Wektor stanu i~model aerodynamiczny}
+Wektor stanu jest 9-wymiarowy --- położenie, prędkość i~przyśpieszenie w~trzech osiach:
+\begin{equation}
+\mathbf{x} = [\,x,\,v_x,\,a_x,\;\, y,\,v_y,\,a_y,\;\, z,\,v_z,\,a_z\,]^{\!\top}.
+\end{equation}
+W~fazie wolnego lotu funkcja przejścia $f(\cdot)$ uwzględnia opór powietrza~\cite{aero},
+którego siła
+jest proporcjonalna do~kwadratu prędkości, $\mathbf{F}_d = -\tfrac{1}{2}\rho\,C_d\,A\,\lVert
+\mathbf{v}\rVert\,\mathbf{v}$. Po~podzieleniu przez masę otrzymuje się przyśpieszenie wypadkowe:
+\begin{equation}
+\dot{\mathbf{v}} = \hat{\mathbf{g}} - k\,\lVert\mathbf{v}\rVert\,\mathbf{v}, \qquad
+k = \frac{\rho\,C_d\,A}{2m},
+\end{equation}
+gdzie dla~piłki siatkowej przyjęto $m=0{,}27$~kg, $\rho=1{,}204$~kg/m${}^3$,
+$A=0{,}0346$~m${}^2$, $C_d=0{,}42$, co~daje współczynnik tłumienia $k\approx0{,}0314$~m${}^{-1}$.
+Uwzględnienie oporu w~modelu (a~nie~tylko czystej balistyki) jest istotne dla~szybkich
+ataków, gdzie zniekształca on~tor zauważalnie w~stosunku do~paraboli próżniowej.
+
+\podpodrozdz{2.5.3. Anizotropowy model szumu pomiaru}
+Macierz $R$ konstruuje się jako sumę trzech składników, oddających odmienną naturę
+niepewności w~kierunku promienia i~w~kierunkach poprzecznych:
+\begin{equation}
+R = \sigma_{Z_c}^2\,\mathbf{d}\,\mathbf{d}^{\!\top}
+  + Z^2\,\sigma_{uv}^2\,\bigl(\mathbf{J}_u\mathbf{J}_u^{\!\top}+\mathbf{J}_v\mathbf{J}_v^{\!\top}\bigr)
+  + r_{\text{floor}}\,I,
+\end{equation}
+gdzie pierwszy człon to~niepewność głębi wzdłuż~promienia $\mathbf{d}$, drugi --- niepewność
+poprzeczna skalowana jakobianami $\mathbf{J}_u,\mathbf{J}_v$ kierunku piksela, a~$r_{\text{floor}}
+=0{,}02$~m${}^2$ to~podłoga numeryczna gwarantująca dodatnią określoność. Kluczowa jest
+wariancja głębi, wynikająca z~propagacji błędu szerokości ramki przez wzór~$Z_c=fD/w$:
+\begin{equation}
+\sigma_{Z_c} = \left|\frac{\partial Z_c}{\partial w}\right|\sigma_w
+             = \frac{f\,D}{w^2}\,\sigma_w .
+\end{equation}
+Kwadratowy spadek $1/w^2$ sprawia, że~przy~małej (dalekiej) ramce $\sigma_{Z_c}$ rośnie
+gwałtownie --- stąd anizotropia $R$ jest adaptacyjna i~rośnie z~odległością. Dodatkowo
+niepewność szerokości ramki zwiększa się przy~szybkim ruchu (rozmycie konturu) za~pomocą
+\emph{bramki prędkościowej}: $\sigma_{w,\text{eff}} = \sigma_w\,(1 + g_v\,s_{\text{img}})$,
+gdzie $s_{\text{img}}$~--~prędkość obrazowa, $g_v=0{,}15$, a~bazowo $\sigma_w=1{,}5$~px.
+
+\podpodrozdz{2.5.4. Strojenie kowariancji i~ochrona numeryczna}
+Macierz szumu procesu $Q$ różnicuje się względem trybu ruchu: dla~lotu balistycznego
+przyjmuje małą wariancję ($\sigma^2_{\text{bal}}=0{,}1$), ufając modelowi fizycznemu;
+dla~trybu uderzenia --- bardzo dużą ($\sigma^2_{\text{hit}}=100$), dopuszczając nieciągłą
+zmianę prędkości; dla~odbicia od~podłoża --- pośrednią ($\sigma^2_{\text{bounce}}=5$).
+Bazowa macierz $R$ przyjmuje $\sigma_x=\sigma_y=0{,}1$~m oraz $\sigma_z=0{,}2$~m, oddając
+gorszą obserwowalność głębi już na~poziomie podstawowym. Aby~filtr nie~uległ degeneracji
+w~długich epizodach coastingu, po~każdym kroku wymusza się symetrię $P\leftarrow\tfrac12(P+P^{\!\top})$
+oraz ograniczenie maksymalnych wartości własnych. Jeśli wiarygodność któregoś z~modeli IMM
+spadnie poniżej progu numerycznego ($\varepsilon=10^{-8}$), stosuje się bayesowski fallback
+przepisujący prawdopodobieństwo trybu z~rozkładu \emph{a~priori}, co~zapobiega „eksplozji”
+kowariancji i~utracie treku.
+
+\podrozdz{2.6. Architektura współpracujących modeli wielokrotnych (IMM)}
+Pojedynczy model ruchu nie~opisze epizodu z~wieloma kontaktami. Dlatego UKF osadzono
+w~architekturze IMM~\cite{imm,barshalom}, która równolegle utrzymuje kilka filtrów odpowiadających różnym
+hipotezom o~bieżącym trybie dynamiki i~łączy ich estymaty proporcjonalnie do~bieżących
+prawdopodobieństw trybów. W~każdym kroku wykonywane są: mieszanie warunkowych estymat
+(zgodnie z~macierzą prawdopodobieństw przejść między trybami), równoległa predykcja
+i~korekcja w~każdym modelu, aktualizacja prawdopodobieństw trybów na~podstawie
+wiarygodności (likelihood) pomiaru oraz połączenie wyników w~jedną estymatę. W~systemie
+zdefiniowano trzy modele: ruch o~stałej prędkości (CV) dla~spokojnych faz, ruch o~stałym
+przyśpieszeniu (CA) dla~lotu balistycznego z~oporem oraz model „uderzenia” dla~nieciągłych
+zmian wektora prędkości w~momencie kontaktu (rys.~\ref{fig:imm}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.7cm and 1.5cm, font=\footnotesize]
+  \node[vbnode, minimum width=2cm](cv){CV\\\scriptsize stała prędkość};
+  \node[vbnode, below=of cv, minimum width=2cm](ca){CA\\\scriptsize lot balistyczny};
+  \node[vbnode, below=of ca, minimum width=2cm](hit){Uderzenie\\\scriptsize zmiana wektora};
+  \node[vbnode, right=2.4cm of ca, minimum width=2.2cm](mix){Mieszanie\\IMM};
+  \draw[vbflow](cv.east)--(mix.west);
+  \draw[vbflow](ca)--(mix);
+  \draw[vbflow](hit.east)--(mix.west);
+  \draw[vbflow, dashed](mix.north)to[out=60,in=0](cv.east);
+  \node[vbnode, right=1.5cm of mix, minimum width=2cm](out){Estymata\\stanu};
+  \draw[vbflow](mix)--(out);
+\end{tikzpicture}
+\caption{Współpracujące modele wielokrotne: równoległe hipotezy ruchu mieszane wagami
+  prawdopodobieństw trybów.}
+\label{fig:imm}
+\end{figure}
+
+Mieszanie estymat warunkowych steruje macierz prawdopodobieństw przejść $\Pi=[\pi_{ij}]$,
+gdzie $\pi_{ij}$ to~prawdopodobieństwo przejścia z~trybu~$i$ do~trybu~$j$ między klatkami.
+Wartości diagonalne są wysokie (np.~$\pi_{11}=0{,}95$), co~odzwierciedla dużą bezwładność
+trybu --- gra rzadko zmienia charakter dynamiki z~klatki na~klatkę. Istotnym usprawnieniem
+jest \emph{adaptacyjna} macierz przejść $\Pi(y,v_y)$, zależna od~stanu: gdy~piłka znajduje
+się nisko i~opada ($y<0{,}3$~m oraz $v_y<0$), system przełącza się z~macierzy bazowej
+$\Pi_{\text{base}}$ na~macierz „przy~podłożu” $\Pi_{\text{ground}}$, która podnosi
+prawdopodobieństwo przejścia do~trybu odbicia. Mechanizm ten~skraca opóźnienie reakcji
+na~kontakt z~czterech klatek do~jednej, co~jest kluczowe dla~poprawnego odtworzenia
+gwałtownej zmiany toru w~momencie odbicia.
+
+\podrozdz{2.7. Śledzenie 3D --- adaptacja ByteTrack (IMMTracker)}
+Asocjację danych zrealizowano jako adaptację algorytmu ByteTrack~\cite{bytetrack} do~przestrzeni
+trójwymiarowej. Zamiast metryki IoU (zawodnej dla~małego, szybkiego obiektu) zastosowano
+statystyczną odległość Mahalanobisa~\cite{barshalom} między predykcją filtra a~detekcją:
+\begin{equation}
+d^2 = (z - H\hat{x})^{\!\top}\, S^{-1}\, (z - H\hat{x}),
+\end{equation}
+gdzie $H$~--~macierz pomiaru, a~$S$~--~macierz kowariancji innowacji. Odległość ta~uwzględnia
+niepewność estymaty: dopuszczalne odchylenie detekcji jest większe tam, gdzie filtr jest
+mniej pewny. Asocjacja jest dwustopniowa: najpierw dopasowuje się detekcje o~wysokiej
+pewności, a~następnie --- w~obrębie pozostałych bramek --- detekcje słabsze, co~pozwala
+utrzymać trek mimo chwilowych spadków pewności detektora. Bramka Mahalanobisa jest
+dynamiczna i~rozszerza się automatycznie, gdy~model wykryje duży rozrzut prędkości (faza
+ataku). Cykl życia treku obejmuje stany: wstępny (tentative), potwierdzony (confirmed)
+oraz utracony; przy~chwilowej okluzji piłki trek przechodzi w~tryb \emph{coastingu},
+w~którym jego stan jest podtrzymywany samą predykcją filtra (rys.~\ref{fig:bytetrack}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm and 1.1cm, font=\scriptsize,
+  bstep/.style={rectangle, rounded corners=2pt, draw=vbInk, fill=vbLight,
+               text width=2.6cm, align=center, minimum height=1cm}]
+  \node[bstep](pred){Predykcja IMM\\(bramka 3D)};
+  \node[bstep, right=of pred](h){Etap 1:\\detekcje pewne};
+  \node[bstep, right=of h](l){Etap 2:\\detekcje słabe};
+  \node[bstep, right=of l](upd){Korekcja\\stanu};
+  \node[bstep, below=0.8cm of l](coast){Coasting\\(brak detekcji)};
+  \draw[vbflow](pred)--(h); \draw[vbflow](h)--(l); \draw[vbflow](l)--(upd);
+  \draw[vbflow, dashed](pred.south)to[out=-90,in=180](coast.west);
+  \draw[vbflow, dashed](coast.east)to[out=0,in=-90](upd.south);
+\end{tikzpicture}
+\caption{Dwustopniowa asocjacja ByteTrack w 3D z trybem coastingu przy braku detekcji.}
+\label{fig:bytetrack}
+\end{figure}
+
+Bramkowanie oparto na~rozkładzie $\chi^2$: ponieważ kwadrat odległości Mahalanobisa $d^2$
+przy~poprawnym dopasowaniu ma~rozkład $\chi^2$ o~liczbie stopni swobody równej wymiarowi
+pomiaru ($df=3$), próg bramki ustalono na~$d^2\le16{,}0$, co~odpowiada poziomowi ufności
+$P\approx99{,}7\%$ --- detekcja jest odrzucana tylko wtedy, gdy~jej zgodność z~predykcją jest
+statystycznie skrajnie nieprawdopodobna. Pierwszy etap asocjacji obejmuje detekcje pewne
+($\text{conf}>0{,}6$), drugi --- słabe ($0{,}1<\text{conf}\le0{,}6$); przypisania w~obu
+etapach wyznacza algorytm węgierski (Hungarian)~\cite{hungarian} na~macierzy kosztów $d^2$. Trek uznaje się
+za~potwierdzony po~co~najmniej trzech zgodnych obserwacjach, a~utrzymuje (w~trybie coastingu)
+do~$T_{\max}=80$ klatek bez~detekcji, zanim zostanie usunięty. Pełny cykl asocjacji
+realizuje siedmiokrokowa procedura: predykcja IMM~$\to$ bramkowanie~$\to$ etap~1
+(detekcje pewne)~$\to$ etap~2 (detekcje słabe)~$\to$ korekcja~$\to$ obsługa treków
+niedopasowanych (coasting)~$\to$ inicjalizacja nowych treków z~detekcji nadmiarowych.
+
+\podrozdz{2.8. Mechanizmy ochrony głębi przed degeneracją}
+\label{sec:ochrona}
+Sercem oryginalnego wkładu projektu jest zespół mechanizmów chroniących oszacowanie głębi
+przed degeneracją opisaną w~podrozdziale~\ref{sec:degen}. Wynikają one~wprost z~obserwacji,
+że~składowa głębinowa pomiaru jest znacznie mniej wiarygodna od~składowych bocznych,
+a~jej wiarygodność dodatkowo maleje z~odległością. Wzajemne powiązanie trzech mechanizmów
+oraz miejsce ich działania w~potoku ilustruje rysunek~\ref{fig:ochrona}.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=0.55cm and 1.0cm, font=\footnotesize,
+  pstep/.style={rectangle, rounded corners=2pt, draw=vbInk, fill=vbLight,
+               text=vbInk, text width=3.0cm, align=center, minimum height=1.05cm},
+  pin/.style={rectangle, draw=vbGray, fill=white, text=vbGray, font=\scriptsize,
+              text width=2.7cm, align=center, minimum height=0.8cm}]
+  \node[pin](meas){Pomiar 3D\\$(X,Y,Z)$ + ramka $w$};
+  \node[pstep, right=of meas](m1){2.8.1\\Anizotropowa $R$\\\scriptsize $\sigma_{Z_c}=fD\sigma_w/w^2$};
+  \node[pstep, right=of m1](m2){2.8.2\\Bramka Gate~A\\\scriptsize boczna $\oplus$ głębinowa};
+  \node[pstep, right=of m2](m3){2.8.3\\Ograniczniki\\\scriptsize pułap 21 m, Z-fence};
+  \node[pin, right=of m3](out){Stabilna\\estymata głębi};
+  \draw[vbflow](meas)--(m1); \draw[vbflow](m1)--(m2);
+  \draw[vbflow](m2)--(m3); \draw[vbflow](m3)--(out);
+\end{tikzpicture}}
+\caption{Trójstopniowa ochrona głębi: adaptacyjne ważenie pomiaru, rozdzielcze
+  bramkowanie i fizyczne ograniczenie predykcji.}
+\label{fig:ochrona}
+\end{figure}
+
+\podpodrozdz{2.8.1. Anizotropowy model szumu pomiaru}
+Składowa głębinowa otrzymuje wyższą wariancję niż~składowe boczne, a~ich proporcja jest
+adaptacyjna --- filtr ufa głębi proporcjonalnie do~jej wiarygodności w~danej odległości
+(zgodnie ze~wzorem~$\sigma_{Z_c}=fD\sigma_w/w^2$ z~podrozdz.~2.5.3). Dzięki temu zaszumiona
+głębia z~dalekiego planu nie~„rozkołysuje” całej estymaty, podczas gdy~dobrze obserwowane
+współrzędne boczne pozostają wierne pomiarowi.
+
+\podpodrozdz{2.8.2. Bramka asocjacji odporna na głębię}
+Innowacja boczna i~głębinowa są rozdzielane: duże odchylenie wyłącznie w~głębi nie~odrzuca
+poprawnej detekcji (zastosowano martwą strefę innowacji głębi), a~przy~dużych innowacjach
+wariancja $\sigma_Z^2$ jest dodatkowo inflowana. Bramkę odporną na~głębię (Gate~A)
+formalizuje twardy próg boczny oraz regularyzacja typu Hubera z~martwą strefą:
+\begin{equation}
+\sqrt{\Delta X^2 + \Delta Y^2} \le r_{\text{lat}}, \qquad
+\sigma_Z^2 \leftarrow \sigma_Z^2 + \bigl(g_d\cdot\max(0,\,\lvert\Delta Z\rvert - \Delta_{\text{free}})\bigr)^2,
+\end{equation}
+gdzie $r_{\text{lat}}=3$~m to~promień bramki bocznej, $\Delta_{\text{free}}=3$~m to~martwa
+strefa innowacji głębi (poniżej~niej duże $\Delta Z$ nie~jest karane), a~$g_d=0{,}5$~--~zysk
+inflacji. Dzięki temu detekcja poprawna bocznie, lecz odbiegająca w~głębi, nie~zrywa treku,
+a~jedynie zwiększa niepewność estymaty głębi --- co~zapobiega fałszywym „rozerwaniom” treku
+spowodowanym samym szumem głębi.
+
+\podpodrozdz{2.8.3. Fizyczne ograniczniki predykcji}
+Ostatnią warstwę stanowią twarde ograniczenia fizyczne: pułap detekcji
+$Z_{\text{far}}=21$~m (odcinający fałszywe wykrycia tła w~strefie~22--27~m) oraz „ogrodzenie”
+głębi w~trybie coastingu, ograniczające estymatę do~realnego przedziału roboczego
+$Z\in[-3,\,21]$~m. Mechanizmy te~zapobiegają „odlotom” treku w~nierealne odległości
+(33--42~m), gdy~filtr pracuje wyłącznie na~predykcji bez~napływających detekcji.
+
+\podrozdz{2.9. Model fizyczny odbicia piłki}
+Tryb odbicia opisuje nieciągłą zmianę wektora prędkości w~chwili kontaktu z~podłożem.
+Zastosowano model współczynników restytucji~\cite{cross}, w~którym składowa pionowa odwraca zwrot
+i~traci energię, a~składowe poziome ulegają tarciowemu tłumieniu:
+\begin{equation}
+\mathbf{v}^{+} = \bigl[\,\mu\,v_x,\;\; -\varepsilon\,v_y,\;\; \mu\,v_z\,\bigr],
+\end{equation}
+gdzie $\varepsilon=0{,}75\pm0{,}04$~--~współczynnik restytucji pionowej, a~$\mu=0{,}85\pm0{,}05$~--~
+współczynnik tłumienia poziomego. Wartość $\varepsilon$ implikuje stosunek energii
+kinetycznej po~i~przed odbiciem $\varepsilon^2\approx0{,}56$, czyli stratę około~44\%~energii
+w~pojedynczym odbiciu --- zgodną z~obserwowanym zachowaniem piłki siatkowej na~parkiecie.
+Model ten~jest wbudowany w~funkcję przejścia trybu odbicia IMM i~aktywowany przez
+adaptacyjną macierz przejść $\Pi_{\text{ground}}$ opisaną w~podrozdz.~2.6.
+
+%==============================================================================
+\rozdzial{Rozdział 3. Wyniki eksperymentalne i weryfikacja}
+%==============================================================================
+Rozdział przedstawia metodykę oraz wyniki weryfikacji systemu na~rzeczywistym materiale
+meczowym, analizę jego ograniczeń, a~także sposób samodzielnego uruchomienia potoku
+umożliwiający niezależną reprodukcję rezultatów.
+
+\podrozdz{3.1. Metodyka walidacji}
+Dla~wideo transmisyjnego nie~istnieje synchroniczny trójwymiarowy wzorzec rzeczywistego
+położenia piłki, dlatego zastosowano walidację pośrednią opartą na~trzech grupach
+kryteriów. Pierwszą są metryki dokładności detekcji (mAP~\cite{coco}, precyzja, czułość)
+jako miara jakości pierwotnego źródła danych. Drugą --- miary stabilności śledzenia
+(pokrycie trajektorii i~liczba przełączeń identyfikatora, w~duchu metryk CLEAR
+MOT~\cite{clearmot}) oraz kontrolowana analiza ablacyjna mechanizmów ochrony głębi. Trzecią --- fizyczna spójność odtworzonej dynamiki pionowej,
+tj.~zgodność odtworzonego przyśpieszenia w~fazie wolnego lotu z~wartością odniesienia
+przyśpieszenia ziemskiego, traktowana jako pośredni dowód poprawności geometrycznej
+rekonstrukcji.
+
+Materiałem testowym był fragment transmisji meczu reprezentacji (Japonia--Polska)
+o~czasie trwania~146{,}3~s, liczący~7317~klatek przy~50~kl./s i~rozdzielczości
+$1920\times1080$. Materiał ten~zawiera pełne spektrum faz gry: zagrywki, rozegrania,
+ataki o~wysokiej prędkości, bloki oraz wymiany z~wielokrotnymi kontaktami, a~także
+ujęcia z~obu stron boiska --- bliskiej i~dalekiej --- co~pozwala ocenić zachowanie systemu
+w~całym zakresie warunków obserwacyjnych, w~tym w~strefie krytycznej dla~rekonstrukcji głębi.
+
+\podrozdz{3.2. Jakość detekcji}
+\begin{table}[H]
+\centering
+\caption{Wybrane metryki jakości modelu YOLO26m (zbiór walidacyjny)}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{X c}
+\toprule
+\rowcolor{vbHead}\textbf{Metryka} & \textbf{Wartość} \\
+\midrule
+mAP@0.5            & 0,857 \\
+mAP@0.5:0.95       & 0,526 \\
+Precyzja (Precision) & 0,899 \\
+Czułość (Recall)     & 0,794 \\
+Rozmiar wejścia (imgsz)   & 1088 \\
+Inferencja na klatkę      & 17,8 ms \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent Osiągnięta wartość mAP@0.5 = 0,857 jest dobra dla~obiektu tak małego i~szybkiego,
+zwłaszcza wobec silnego rozmycia ruchowego w~fazie ataku. Krzywa precyzja--czułość
+(rys.~\ref{fig:pr}) potwierdza wysoką precyzję w~szerokim zakresie progów, co~jest istotne,
+ponieważ to~właśnie fałszywe detekcje (podwójne cienie, refleksy) najsilniej obciążają
+warstwę śledzenia. Macierz pomyłek (rys.~\ref{fig:cm}) potwierdza, że~dominującym źródłem
+błędu pozostaje tło, nie~zaś mylna klasyfikacja obiektu.
+
+Nie~każda surowa detekcja trafia jednak do~warstwy śledzenia. Warstwa filtracji geometrycznej
+odrzuca wykrycia fizycznie niemożliwe, zanim zostaną one~przekazane do~asocjacji
+(tabela~\ref{tab:lejek}). Z~4698~surowych detekcji zaakceptowano~4033 (85{,}8\%); odrzucono
+440~detekcji poza~granicami boiska, 95~przyciętych krawędzią kadru oraz 83~znajdujące się
+poniżej poziomu podłogi. Filtracja ta~odciąża śledzenie od~artefaktów, które --- mimo
+poprawnej klasyfikacji przez~YOLO --- nie~odpowiadają realnemu położeniu piłki.
+
+\begin{table}[H]
+\centering
+\caption{Lejek akceptacji detekcji (filtracja geometryczna)}
+\label{tab:lejek}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{X c}
+\toprule
+\rowcolor{vbHead}\textbf{Etap} & \textbf{Liczba detekcji} \\
+\midrule
+Surowe detekcje YOLO26m       & 4698 \\
+Odrzucone --- poza boiskiem (oob) & $-$440 \\
+Odrzucone --- przycięte krawędzią & $-$95 \\
+Odrzucone --- poniżej podłogi  & $-$83 \\
+\midrule
+\textbf{Zaakceptowane do śledzenia} & \textbf{4033 (85,8\%)} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\textwidth]{img/yolo_pr.png}
+\caption{Krzywa precyzja--czułość modelu detekcji piłki.}
+\label{fig:pr}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+\includegraphics[width=\textwidth]{img/yolo_cm.png}
+\caption{Znormalizowana macierz pomyłek detektora.}
+\label{fig:cm}
+\end{minipage}
+\end{figure}
+
+\podrozdz{3.3. Stabilność śledzenia 3D}
+Na~całym materiale testowym system zrekonstruował 30~trajektorii odpowiadających 30~wymianom,
+utrzymując ciągły, potwierdzony trek przez~82{,}1\%~klatek (6006~z~7317), z~czego 52{,}8\%
+(3864~klatki) przypadło na~właściwe fazy gry. Zagregowana statystyka czasoprzestrzenna
+(tabela~\ref{tab:stats}) potwierdza fizyczną sensowność odtworzonej dynamiki: maksymalna
+prędkość piłki~39{,}64~m/s (142{,}7~km/h) mieści się w~zakresie realnych ataków siatkarskich,
+a~maksymalna wysokość~5{,}06~m --- w~zasięgu lobów nad~blokiem. Zarejestrowano przy~tym
+95~przekroczeń płaszczyzny siatki oraz zbliżony udział obu stron boiska (56{,}1\%~bliska,
+43{,}9\%~daleka), co~świadczy o~pełnym pokryciu pola gry.
+
+\begin{table}[H]
+\centering
+\caption{Zagregowana statystyka czasoprzestrzenna śledzenia (materiał testowy)}
+\label{tab:stats}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{X c}
+\toprule
+\rowcolor{vbHead}\textbf{Wskaźnik} & \textbf{Wartość} \\
+\midrule
+Zrekonstruowane treki / wymiany    & 30 / 30 \\
+Pokrycie trajektorii (klatki potwierdzone) & 82,1\% (6006/7317) \\
+Łączna długość toru piłki          & 1331,2 m \\
+Prędkość średnia / maksymalna      & 10,33 / 39,64 m/s (142,7 km/h) \\
+Wysokość średnia / maksymalna      & 2,90 / 5,06 m \\
+Przekroczenia siatki               & 95 \\
+Udział stron (bliska / daleka)     & 56,1\% / 43,9\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Kontrolowana analiza ablacyjna mechanizmów ochrony głębi (podrozdział~\ref{sec:ochrona})
+potwierdziła ich istotny wpływ na~stabilność (tabela~\ref{tab:ablacja}). Po~ich włączeniu
+liczba nierealnych treków-„widm” spadła z~333 do~41 (a~potwierdzonych ze~123 do~20),
+maksymalna odtworzona głębia z~33{,}9 do~21{,}4~m, liczba dużych skoków głębi $\lvert\Delta
+Z\rvert>5$~m z~60 do~6, a~przełączeń identyfikatora treku --- z~19 do~3 na~epizod, przy~
+zachowaniu zerowego błędu bocznego. Oznacza to, że~mechanizmy te~tłumią zakłócenia wyłącznie
+w~niewiarygodnej składowej głębinowej, nie~degradując dobrze obserwowanych składowych bocznych.
+
+\begin{table}[H]
+\centering
+\caption{Wpływ mechanizmów ochrony głębi (analiza ablacyjna)}
+\label{tab:ablacja}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{X c c}
+\toprule
+\rowcolor{vbHead}\textbf{Wskaźnik} & \textbf{Bez ochrony} & \textbf{Z ochroną} \\
+\midrule
+Treki potwierdzone & 123 & 20 \\
+Treki ogółem (z „widmami”) & 333 & 41 \\
+Maksymalna odtworzona głębia $Z$ & 33,9 m & 21,4 m \\
+Skoki głębi $\lvert\Delta Z\rvert>3$ m & 158 & 14 \\
+Skoki głębi $\lvert\Delta Z\rvert>5$ m & 60 & 6 \\
+Przełączenia identyfikatora (ID switch) & 19 & 3 \\
+Błąd boczny & --- & $\approx$ 0 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\podrozdz{3.4. Analiza trybów IMM oraz walidacja fizyczna}
+Rozkład prawdopodobieństw trybów IMM odzwierciedla strukturę gry: dominuje model
+o~stałej prędkości (śr.~0,91), natomiast modele balistyczny (0,07) oraz uderzenia (0,02)
+uaktywniają się w~krótkich, lecz kluczowych momentach kontaktu (rys.~\ref{fig:immbar}).
+Potwierdza to~poprawne działanie mechanizmu przełączania trybów --- architektura nie~„grzęźnie”
+w~jednym modelu, lecz reaguje na~nieciągłości dynamiki. Walidacja fizyczna odtworzonego
+przyśpieszenia pionowego w~fazie wolnego lotu dała wartość $9{,}0$--$9{,}2$~m/s${}^2$
+(odchylenie poniżej~8\% od~$g=9{,}81$~m/s${}^2$), co~stanowi niezależne potwierdzenie
+poprawności geometrycznej rekonstrukcji 3D --- a~zarazem waliduje dobór ogniskowej
+$f\approx5805$~px (błędne $f\approx1300$~px dawało~$g_{\text{odt}}$ poza~zakresem fizycznym).
+
+Analiza ujawniła jednak istotne ograniczenie obecnej konfiguracji: tryby uderzenia
+i~odbicia pozostają w~praktyce \emph{uśpione} --- ich prawdopodobieństwa rzadko przekraczają
+kilka procent, a~większość epizodów obsługuje model o~stałej prędkości. Oznacza to, że~choć
+architektura IMM jest w~pełni funkcjonalna, jej potencjał modelowania nieciągłości kontaktu
+nie~jest dotąd w~pełni wykorzystany; przestrojenie progów aktywacji trybów wskazano jako
+jeden z~kierunków dalszego rozwoju. Cały potok działa przy~tym w~czasie rzeczywistym,
+osiągając~46--52~kl./s na~sprzęcie klasy konsumenckiej, co~spełnia założenie o~przetwarzaniu
+strumienia transmisyjnego bez~buforowania.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=13cm, height=5.4cm,
+  xbar, xmin=0, xmax=1.18,
+  ytick={0,1,2},
+  yticklabels={Uderzenie, CA (balistyczny), CV (stała prędkość)},
+  nodes near coords={\pgfmathprintnumber[fixed,precision=2]{\pgfplotspointmeta}},
+  nodes near coords style={font=\footnotesize, anchor=west, xshift=2pt, /pgf/number format/use comma},
+  bar width=15pt, enlarge y limits=0.35,
+  xtick={0,0.2,0.4,0.6,0.8,1.0},
+  xticklabel style={/pgf/number format/use comma},
+  xlabel={średnie prawdopodobieństwo trybu},
+  tick label style={font=\footnotesize},
+  yticklabel style={align=right}, every axis label/.style={font=\small},
+  axis lines=left, xmajorgrids, grid style={vbLight},
+]
+\addplot[fill=vbCyan, draw=vbInk] coordinates {(0.02,0) (0.07,1) (0.91,2)};
+\end{axis}
+\end{tikzpicture}
+\caption{Średni rozkład prawdopodobieństw trybów IMM w testowych epizodach gry: dominuje
+  model stałej prędkości, podczas gdy tryby kontaktu pozostają w praktyce uśpione.}
+\label{fig:immbar}
+\end{figure}
+
+\podrozdz{3.5. Prezentacja działania systemu}
+\begin{sloppypar}
+Poniższe klatki overlay pochodzą z~działającego potoku (\texttt{run\_pipeline.sh}) i~ilustrują
+śledzenie w~różnych fazach gry. Wizualizacja zawiera odtworzony szkielet boiska, panel
+współrzędnych X/Y/Z oraz głębi $Z_{\text{cam}}$, oznaczenie bieżącego trybu pracy treku
+(\texttt{DETECTED} / \texttt{COASTING}) oraz rekonstruowaną trajektorię 3D piłki.
+\end{sloppypar}
+
+Rysunek~\ref{fig:ovl1} przedstawia fazę chwilowej utraty detekcji: mimo braku obserwacji
+piłki trek pozostaje aktywny w~trybie \texttt{COASTING}, a~filtr UKF utrzymuje estymatę
+położenia z~ograniczonym (przez mechanizm \emph{coast Z-fence}) przyrostem głębi.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{img/overlay_coasting.png}
+\caption{Wizualizacja śledzenia w fazie lotu z chwilową utratą detekcji: trek
+  pozostaje aktywny w trybie \texttt{COASTING}, panel HUD raportuje współrzędne 3D oraz
+  ograniczony przyrost głębi $\Delta Z_{\text{cam}}$.}
+\label{fig:ovl1}
+\end{figure}
+
+Rysunek~\ref{fig:ovl2} odpowiada fazie ataku: piłka porusza się z~wysoką prędkością,
+a~zrekonstruowana trajektoria 3D (krzywa balistyczna nad~siatką) jest zachowana mimo
+gwałtownej zmiany głębi obserwacji.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{img/overlay_atak.png}
+\caption{Wizualizacja śledzenia w fazie ataku: zrekonstruowana krzywa balistyczna toru
+  piłki nad siatką przy szczytowej prędkości i szybkiej zmianie głębi.}
+\label{fig:ovl2}
+\end{figure}
+
+\podrozdz{3.6. Analiza ograniczeń}
+Pozostała granica dokładności dotyczy dalekiej strony boiska i~wynika wprost
+z~fundamentalnej natury geometrii jednokamerowej (wzór~2), a~nie~z~doboru parametrów.
+W~tej strefie detektor zaniża rozmiar ramki, co~przekłada się na~systematyczne
+niedoszacowanie głębi; mechanizmy ochrony tłumią objawy (skoki, rozerwania treku), lecz
+nie~usuwają samego źródła. Dalsze przesunięcie tej granicy wymaga zwiększenia pokrycia
+detektora (więcej danych uczących dla~dalekiego planu) lub~lekkiej konfiguracji
+dwukamerowej w~strefie krytycznej --- nie~zaś dalszego strojenia filtra. Wyznacza to~jasno
+naturalną granicę bieżącej, monokularnej wersji systemu i~zarazem motywuje jej przyszłą
+rozbudowę.
+
+\podrozdz{3.7. Uruchomienie i samodzielna weryfikacja}
+Aby~umożliwić niezależne sprawdzenie działania systemu na~dowolnym nagraniu meczu,
+cały potok ukryto za~jednym skryptem wejściowym \texttt{run\_pipeline.sh}, który reprodukuje
+referencyjny wynik z~zablokowaną konfiguracją (ochrona głębi, pułap detekcji~21~m,
+coast Z-fence) bez~ręcznego podawania kilkunastu parametrów. Do~uruchomienia potrzebny jest
+interpreter Python (zalecane środowisko \texttt{conda} o~nazwie \texttt{Volleyball\_diploma})
+z~bibliotekami \texttt{ultralytics} (YOLO26)~\cite{ultra}, \texttt{opencv-python}~\cite{opencv},
+\texttt{numpy}, \texttt{scipy}, \texttt{filterpy}~\cite{filterpy}
+oraz \texttt{ffmpeg}. Najprostsze wywołanie wymaga jedynie ścieżki do~pliku
+wideo; opcjonalnie można podać prefiks nazwy oraz przedział czasowy:
+\begin{lstlisting}[style=sh]
+# Caly plik wideo:
+run_pipeline.sh mecz.mp4
+
+# Tylko fragment 60-90 s, z wlasnym prefiksem nazwy:
+run_pipeline.sh mecz.mp4 test_atak 60 90
+\end{lstlisting}
+Po~zakończeniu w~katalogu \texttt{runs/} powstają trzy artefakty: \texttt{*\_tracks.jsonl}
+(pełna trajektoria 3D klatka po~klatce), \texttt{*\_stats.json} (zagregowane statystyki
+czasoprzestrzenne) oraz \texttt{*\_overlay.mp4} (nagranie z~naniesioną wizualizacją).
+Plik overlay pozwala wzrokowo zweryfikować poprawność: trajektoria powinna podążać za~piłką,
+panel HUD raportować sensowne współrzędne, a~znacznik trybu przełączać się na~\texttt{COASTING}
+przy~chwilowym zaniku detekcji.
+
+%==============================================================================
+\rozdzial{Podsumowanie i wnioski}
+%==============================================================================
+\podrozdz{Realizacja celów}
+Zbudowano kompletny, działający potok monokularnej analizy gry w~siatkówkę: od~detekcji
+piłki siecią YOLO26m, przez rekonstrukcję 3D (model kamery otworkowej, kalibracja PnP
+i~rzutowanie wsteczne), po~wielomodelową filtrację (IMM + UKF) i~śledzenie w~przestrzeni
+3D (\texttt{IMMTracker}). Wszystkie wymagania funkcjonalne zostały zrealizowane, a~system
+działa na~pojedynczym strumieniu wideo z~kamery klasy konsumenckiej, mieszcząc się
+w~założonym budżecie sprzętowym i~czasowym. Projekt można zatem uznać za~zasadniczo
+ukończony w~obecnym, monokularnym zakresie.
+
+\podrozdz{Wnioski}
+Najważniejszym wnioskiem inżynierskim jest to, że~o~jakości monokularnego śledzenia 3D
+decyduje nie~sam dobór filtra, lecz świadome przeciwdziałanie degeneracji głębi. Zespół
+mechanizmów ochrony głębi (anizotropowy model szumu pomiaru, bramki rozdzielające
+innowację boczną i~głębinową, fizyczne ograniczniki predykcji) zredukował liczbę
+nierealnych skoków głębi z~30 do~1 oraz przełączeń identyfikatora z~19 do~3 na~epizod,
+przy~zachowaniu zerowego błędu bocznego. Potwierdza to~tezę, że~architekturę monokularną
+można doprowadzić do~praktycznej użyteczności, o~ile świadomie modeluje się jej
+ograniczenia, zamiast je~ignorować. Zastosowane techniki --- bezpochodna filtracja UKF,
+przełączanie modeli ruchu IMM oraz dwustopniowa asocjacja w~metryce 3D --- okazały się
+adekwatne do~specyfiki szybkiej, wielofazowej gry. Osiągnięty wynik autor traktuje jako
+praktyczny pułap dokładności możliwy do~uzyskania z~pojedynczej kamery: dalszy postęp leży
+już nie~w~strojeniu, lecz w~rozszerzeniu samej architektury akwizycji danych.
+
+\podrozdz{Kierunki rozwoju}
+Modułowa budowa systemu czyni go~dogodną bazą do~dalszej rozbudowy, którą autor zamierza
+podjąć w~ramach kolejnej pracy dyplomowej. Najważniejsze planowane kierunki to:
+\begin{itemize}[leftmargin=1.4em, itemsep=2pt]
+  \item lekka konfiguracja dwukamerowa umożliwiająca triangulację głębi w~strefie
+        krytycznej --- bezpośrednie zaadresowanie zasadniczego ograniczenia monokularu;
+  \item rozszerzenie pokrycia detektora dla~dalekiej strony boiska (więcej danych
+        uczących, ukierunkowana augmentacja);
+  \item automatyczne rozpoznawanie typów akcji (zagrywka, atak, blok) na~bazie profilu
+        prawdopodobieństw trybów IMM;
+  \item eksport statystyki gry do~interaktywnego panelu trenerskiego oraz integracja
+        z~szerszym potokiem analityki danych sportowych.
+\end{itemize}
+
+%==============================================================================
+\clearpage
+\renewcommand{\refname}{Bibliografia}
+\addcontentsline{toc}{section}{Bibliografia}
+\begin{thebibliography}{99}
+
+% --- Detekcja obiektów ---
+\bibitem{yolo} J.~Redmon, S.~Divvala, R.~Girshick, A.~Farhadi, \emph{You Only Look Once:
+  Unified, Real-Time Object Detection}, Proc.~IEEE CVPR, 2016, ss.~779--788.
+\bibitem{ultra} G.~Jocher i~in., \emph{Ultralytics YOLO --- dokumentacja techniczna}.
+  \url{https://docs.ultralytics.com} (dostęp: 06.2026).
+\bibitem{coco} T.-Y.~Lin i~in., \emph{Microsoft COCO: Common Objects in Context},
+  Proc.~ECCV, 2014, ss.~740--755.
+\bibitem{albumentations} A.~Buslaev i~in., \emph{Albumentations: Fast and Flexible Image
+  Augmentations}, Information, t.~11, nr~2, 2020, art.~125.
+
+% --- Śledzenie i asocjacja danych ---
+\bibitem{bytetrack} Y.~Zhang i~in., \emph{ByteTrack: Multi-Object Tracking by Associating
+  Every Detection Box}, Proc.~ECCV, 2022, ss.~1--21.
+\bibitem{hungarian} H.~W.~Kuhn, \emph{The Hungarian Method for the Assignment Problem},
+  Naval Research Logistics Quarterly, t.~2, 1955, ss.~83--97.
+\bibitem{clearmot} K.~Bernardin, R.~Stiefelhagen, \emph{Evaluating Multiple Object
+  Tracking Performance: The CLEAR MOT Metrics}, EURASIP J.~Image Video Process., 2008.
+
+% --- Filtracja Kalmana i estymacja ---
+\bibitem{kalman} R.~E.~Kalman, \emph{A New Approach to Linear Filtering and Prediction
+  Problems}, Trans.~ASME --- J.~Basic Engineering, t.~82, 1960, ss.~35--45.
+\bibitem{ukf} S.~J.~Julier, J.~K.~Uhlmann, \emph{Unscented Filtering and Nonlinear
+  Estimation}, Proceedings of the IEEE, t.~92, nr~3, 2004, ss.~401--422.
+\bibitem{imm} H.~A.~P.~Blom, Y.~Bar-Shalom, \emph{The Interacting Multiple Model Algorithm
+  for Systems with Markovian Switching Coefficients}, IEEE Trans.~Automatic Control,
+  t.~33, nr~8, 1988, ss.~780--783.
+\bibitem{barshalom} Y.~Bar-Shalom, X.~R.~Li, T.~Kirubarajan, \emph{Estimation with
+  Applications to Tracking and Navigation}, John Wiley \& Sons, 2001.
+
+% --- Geometria kamery i kalibracja ---
+\bibitem{hz} R.~Hartley, A.~Zisserman, \emph{Multiple View Geometry in Computer Vision},
+  2.~wyd., Cambridge University Press, 2004.
+\bibitem{zhangcalib} Z.~Zhang, \emph{A Flexible New Technique for Camera Calibration},
+  IEEE Trans.~Pattern Analysis and Machine Intelligence, t.~22, nr~11, 2000, ss.~1330--1334.
+\bibitem{lm} D.~W.~Marquardt, \emph{An Algorithm for Least-Squares Estimation of Nonlinear
+  Parameters}, J.~Society for Industrial and Applied Mathematics, t.~11, 1963, ss.~431--441.
+\bibitem{opencv} G.~Bradski, \emph{The OpenCV Library --- dokumentacja (Camera Calibration,
+  solvePnP)}. \url{https://docs.opencv.org} (dostęp: 06.2026).
+
+% --- Fizyka ruchu piłki ---
+\bibitem{aero} R.~D.~Mehta, \emph{Aerodynamics of Sports Balls}, Annual Review of Fluid
+  Mechanics, t.~17, 1985, ss.~151--189.
+\bibitem{cross} R.~Cross, \emph{The Bounce of a Ball}, American Journal of Physics, t.~67,
+  nr~3, 1999, ss.~222--227.
+
+% --- Narzędzia i biblioteki ---
+\bibitem{filterpy} R.~Labbe, \emph{FilterPy --- Kalman and Bayesian Filters in Python}.
+  \url{https://filterpy.readthedocs.io} (dostęp: 06.2026).
+\end{thebibliography}
+
+\clearpage
+\addcontentsline{toc}{section}{Spis rysunków}
+\listoffigures
+\addcontentsline{toc}{section}{Spis tablic}
+\listoftables
+
+\end{document}

@@ -1,0 +1,14 @@
+\babel@toc {polish}{}\relax 
+\contentsline {figure}{\numberline {1}{\ignorespaces Czułość odtworzonej głębi na jednopikselowy szum ramki rośnie odwrotnie kwadratowo z odległością --- źródło systematycznej niepewności na dalekim planie.}}{11}{figure.caption.4}%
+\contentsline {figure}{\numberline {2}{\ignorespaces Potok przetwarzania --- od klatki wideo do trajektorii 3D, statystyki i overlay.}}{13}{figure.caption.7}%
+\contentsline {figure}{\numberline {3}{\ignorespaces Przykładowe detekcje piłki przez model YOLO26m na klatkach walidacyjnych (rzeczywiste warunki hali, rozmycie ruchowe).}}{14}{figure.caption.9}%
+\contentsline {figure}{\numberline {4}{\ignorespaces Rzutowanie wsteczne: piłka leży na promieniu optycznym o kierunku $\mathbf {d}$, a jej położenie $\mathbf {P}(Z_c)=\mathbf {C}+Z_c\mathbf {d}$ wyznacza głębia $Z_c=fD/w$ szacowana z pikselowego rozmiaru ramki.}}{16}{figure.caption.10}%
+\contentsline {figure}{\numberline {5}{\ignorespaces Cykl sigma-punktowego filtra Kalmana (UKF): generacja punktów sigma, nieliniowa predykcja z modelem oporu, a następnie kalmanowska korekcja pomiarem.}}{17}{figure.caption.11}%
+\contentsline {figure}{\numberline {6}{\ignorespaces Współpracujące modele wielokrotne: równoległe hipotezy ruchu mieszane wagami prawdopodobieństw trybów.}}{20}{figure.caption.12}%
+\contentsline {figure}{\numberline {7}{\ignorespaces Dwustopniowa asocjacja ByteTrack w 3D z trybem coastingu przy braku detekcji.}}{21}{figure.caption.13}%
+\contentsline {figure}{\numberline {8}{\ignorespaces Trójstopniowa ochrona głębi: adaptacyjne ważenie pomiaru, rozdzielcze bramkowanie i fizyczne ograniczenie predykcji.}}{22}{figure.caption.14}%
+\contentsline {figure}{\numberline {9}{\ignorespaces Krzywa precyzja--czułość modelu detekcji piłki.}}{25}{figure.caption.18}%
+\contentsline {figure}{\numberline {10}{\ignorespaces Znormalizowana macierz pomyłek detektora.}}{25}{figure.caption.18}%
+\contentsline {figure}{\numberline {11}{\ignorespaces Średni rozkład prawdopodobieństw trybów IMM w testowych epizodach gry: dominuje model stałej prędkości, podczas gdy tryby kontaktu pozostają w praktyce uśpione.}}{28}{figure.caption.21}%
+\contentsline {figure}{\numberline {12}{\ignorespaces Wizualizacja śledzenia w fazie lotu z chwilową utratą detekcji: trek pozostaje aktywny w trybie \texttt {COASTING}, panel HUD raportuje współrzędne 3D oraz ograniczony przyrost głębi $\Delta Z_{\text {cam}}$.}}{28}{figure.caption.22}%
+\contentsline {figure}{\numberline {13}{\ignorespaces Wizualizacja śledzenia w fazie ataku: zrekonstruowana krzywa balistyczna toru piłki nad siatką przy szczytowej prędkości i szybkiej zmianie głębi.}}{29}{figure.caption.23}%
