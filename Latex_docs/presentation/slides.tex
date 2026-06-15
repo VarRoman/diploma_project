@@ -1,0 +1,320 @@
+% =====================================================================
+%  Презентація до захисту бакалаврського дипломного проєкту
+%  «Система просторового аналізу гри в волейбол з використанням
+%   машинного навчання»
+%  Безщасний Р. Р., ІО-21, КПІ ім. Ігоря Сікорського, ФІОТ
+%
+%  Збірка:  latexmk -pdflatex='xelatex %O %S' -pdf slides.tex
+%  (xelatex обов'язково — кирилиця через fontspec)
+%
+%  Демо-відео НЕ вбудоване у PDF (ненадійно поза Acrobat).
+%  Слайд «Демонстрація» = кадри-кінострічка; коротке демо-відео
+%  доповідач вмикає вручну окремим плеєром (файл обирається окремо).
+% =====================================================================
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usetheme{metropolis}
+\metroset{block=fill, numbering=fraction, progressbar=foot}
+
+\usepackage{fontspec}
+\setsansfont{Arial}            % кирилиця-сумісний sans (встановлений)
+\setmainfont{Arial}
+\usepackage[ukrainian]{babel}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+
+% Зображення з тек диплома
+\graphicspath{%
+  {../sections/pictures_schemes/chapter_1/}%
+  {../sections/pictures_schemes/chapter_2/}%
+  {../sections/pictures_schemes/chapter_4/}%
+}
+
+% Акцентні кольори
+\definecolor{accent}{HTML}{2A6F97}
+\definecolor{good}{HTML}{2E7D32}
+\definecolor{warn}{HTML}{C62828}
+\setbeamercolor{frametitle}{bg=accent}
+\setbeamercolor{progress bar}{fg=accent}
+
+% Допоміжний макрос «велике число + підпис»
+\newcommand{\bignum}[2]{%
+  \begin{minipage}{\linewidth}\centering
+    {\color{accent}\Large\textbf{#1}}\\[2pt]{\footnotesize #2}
+  \end{minipage}}
+
+\title{Система просторового аналізу гри у волейбол\\з використанням машинного навчання}
+\author{Безщасний Роман Русланович}
+\institute{КПІ ім.~Ігоря Сікорського, ФІОТ, кафедра ОТ, гр.~ІО-21\\
+Керівник: асп.~Морозов-Леонов О.~С.}
+\date{Київ — 2026}
+
+\begin{document}
+
+% ---------------------------------------------------------------- 1
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+\note{Вітання. Тема, керівник. Доповідь ~11 хв. Мета — автоматичний 3D-аналіз гри з однієї камери.}
+
+% ---------------------------------------------------------------- 2
+\begin{frame}{Актуальність і проблема}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}
+        \item Аналітика у волейболі = ручний розбір відео, дорогі багатокамерні системи.
+        \item Потрібен \alert{автоматичний} просторовий аналіз із \alert{однієї} камери.
+        \item Виклик: відновити \textbf{3D} з \textbf{монокулярного} відео — глибина неоднозначна.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{4_2_overlay_coasting.png}\\
+      {\scriptsize Кадр роботи системи: 3D-координати м'яча}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{Проблема дорогих систем. Наша мета — дешево, одна камера. Головна складність — глибина з моно.}
+
+% ---------------------------------------------------------------- 3
+\begin{frame}{Мета, об'єкт, задачі}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Мета:} автоматичне відновлення тривимірної траєкторії м'яча та ігрової
+      статистики з відео однієї камери.\\[4pt]
+      \textbf{Об'єкт:} процеси детекції та просторового відстеження об'єктів.\\[4pt]
+      \textbf{Предмет:} методи 3D-трекінгу м'яча за монокулярним відео.
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Задачі:}
+      \begin{enumerate}
+        \item Детекція м'яча (YOLO26).
+        \item Калібрування та відновлення 3D (PnP + ray casting).
+        \item Згладжування траєкторії (IMM/UKF).
+        \item Механізми захисту оцінки глибини.
+        \item Ігрова статистика + експерименти.
+      \end{enumerate}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{Чітко проговорити мету/об'єкт/предмет. 5 задач — це фактично структура роботи.}
+
+% ---------------------------------------------------------------- 4
+\begin{frame}{Аналіз існуючих підходів}
+  \centering
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    \textbf{Етап} & \textbf{Класика} & \textbf{Обраний підхід} \\
+    \midrule
+    Детекція   & MoG2, оптичний потік & \textbf{YOLO26} (one-stage CNN) \\
+    Асоціація  & SORT / ByteTrack     & однооб'єктний трек + NMS \\
+    Згладжування & EKF                & \textbf{IMM/UKF} (нелінійний) \\
+    3D         & стерео / багатокамерні & \textbf{PnP + ray casting} (моно) \\
+    \bottomrule
+  \end{tabular}
+  \vspace{6pt}
+  \begin{itemize}
+    \item Готові MOT-трекери не враховують фізику польоту й виродження глибини.
+    \item Звідси — власний трекер із фізичними гейтами та коастингом.
+  \end{itemize}
+\end{frame}
+\note{Швидко: чому не взяв готове. Готові трекери не знають фізики м'яча й глибини.}
+
+% ---------------------------------------------------------------- 5
+\begin{frame}{Архітектура системи}
+  \centering
+  \begin{tikzpicture}[font=\footnotesize,node distance=6mm,
+      box/.style={draw=accent,thick,rounded corners,fill=accent!8,
+        text width=2.6cm,align=center,minimum height=1cm}]
+    \node[box] (det) {Детекція\\YOLO26};
+    \node[box,right=of det] (geo) {Геометрія\\PnP + 3D ray};
+    \node[box,right=of geo] (trk) {Трекер\\IMM/UKF + гейти};
+    \node[box,right=of trk] (out) {Статистика\\\& візуалізація};
+    \draw[-{Stealth},thick] (det)--(geo);
+    \draw[-{Stealth},thick] (geo)--(trk);
+    \draw[-{Stealth},thick] (trk)--(out);
+    \node[draw=gray,dashed,fit=(det)(out),inner sep=4mm,
+      label=below:{\scriptsize Оркестратор \texttt{run\_pipeline.sh}}] {};
+  \end{tikzpicture}
+  \vspace{6pt}
+  \begin{itemize}
+    \item Три підсистеми + наскрізний оркестратор; вхід — відео, вихід — 9D-стан м'яча.
+    \item Детальні схеми — структурна (Д1) та функціональна (Д2).
+  \end{itemize}
+\end{frame}
+\note{Загальна архітектура. Посилання на плакати Д1/Д2. Кожен блок — окремий слайд далі.}
+
+% ---------------------------------------------------------------- 6
+\begin{frame}{Конвеєр обробки кадру}
+  \centering
+  \includegraphics[height=0.74\textheight]{2_1_algorythmic_conveyer_structure.png}\\
+  {\scriptsize Кадр $\rightarrow$ YOLO26 $\rightarrow$ PnP/3D $\rightarrow$ IMM/UKF $\rightarrow$ гейти $\rightarrow$ 9D-стан}
+\end{frame}
+\note{Покадровий потік даних. Підкреслити зворотний зв'язок прогноз t+1 і гілку коастингу.}
+
+% ---------------------------------------------------------------- 7
+\begin{frame}{Детекція: YOLO26 + датасет}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \includegraphics[width=\linewidth]{1_2_yolo26_architecture.png}
+      \begin{itemize}\footnotesize
+        \item Без'якірна модель, \texttt{imgsz=1088}.
+        \item Датасет \textbf{$\sim$14000} кадрів, 7 підмножин.
+        \item $\sim$6000 розмічено вручну ($>$25 год) з власних матчів.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{4_1_yolo_pr_curve.png}\\[2pt]
+      \bignum{mAP@0.5 $= 0{,}857$}{якість детектора на валідації}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{Архітектура YOLO26 коротко. Наголос на власному датасеті й ручній розмітці. mAP 0.857.}
+
+% ---------------------------------------------------------------- 8
+\begin{frame}{Відновлення 3D і проблема глибини}
+  \begin{columns}[T]
+    \begin{column}{0.44\textwidth}
+      \footnotesize
+      Глибина за шириною рамки:
+      \[ Z_c = \frac{f\cdot D}{w} \]
+      Чутливість до похибки $w$:
+      \[ \frac{\partial Z_c}{\partial w} = -\frac{f\cdot D}{w^2} \]
+      \begin{itemize}
+        \item Ближня зона: $\approx 0{,}14$~м/пкс.
+        \item Дальня ($\sim$60~м): $\approx 2{,}3$~м/пкс.
+        \item \alert{Квадратичне виродження} — корінь усіх дефектів.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}
+      \begin{axis}[
+        domain=4:60, samples=120,
+        width=\linewidth, height=5.2cm,
+        xlabel={Відстань $Z$, м}, ylabel={$|\partial Z_c/\partial w|$, м/пкс},
+        xmin=0, xmax=62, ymin=0, ymax=2.6,
+        grid=both, grid style={gray!20}, tick label style={font=\scriptsize},
+        label style={font=\scriptsize}]
+        \fill[green!12] (axis cs:0,0) rectangle (axis cs:21,2.6);
+        \addplot[accent,very thick,domain=4:60] {x^2/1565};
+        \draw[warn,dashed,thick] (axis cs:21,0)--(axis cs:21,2.6);
+        \node[anchor=north west,font=\tiny,good,align=left] at (axis cs:1,2.5)
+          {робоча зона};
+        \node[warn,anchor=south west,font=\tiny] at (axis cs:21.4,1.5) {стеля 21\,м};
+      \end{axis}
+      \end{tikzpicture}\\
+      {\scriptsize Похибка глибини зростає квадратично з відстанню}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{Ключовий слайд. Пояснити формулу, чому глибина виродна на дальньому боці. Це мотивує всі механізми захисту.}
+
+% ---------------------------------------------------------------- 9
+\begin{frame}{Трекер: IMM/UKF + захист глибини}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}\footnotesize
+        \item \textbf{UKF}: нелінійне згладжування 9D-стану (позиція, швидкість, прискорення).
+        \item \textbf{IMM}: ансамбль моделей руху (балістична / ударна / відскокова).
+        \item \textbf{Гейт A}: інфляція $\sigma_Z^2$ при великій глибинній нев'язці.
+        \item \textbf{Коастинг}: інерційний прогноз із clamp $Z\in[-3,21]$.
+        \item \textbf{Far-Z стеля} детекції 21~м — відсікає фоновий м'яч.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}
+      \begin{axis}[xbar, width=\linewidth, height=3.6cm,
+        xmin=0, xmax=1.1, xlabel={Ймовірність режиму},
+        symbolic y coords={Відскокова,Ударна,Балістична}, ytick=data,
+        nodes near coords, nodes near coords align={horizontal},
+        every node near coord/.append style={font=\scriptsize,
+          /pgf/number format/.cd, fixed, fixed zerofill, precision=2},
+        enlarge y limits=0.45, bar width=14pt, xmajorgrids=true,
+        tick label style={font=\scriptsize}, label style={font=\scriptsize}]
+        \addplot[fill=accent!60] coordinates
+          {(0.91,Балістична) (0.07,Ударна) (0.02,Відскокова)};
+      \end{axis}
+      \end{tikzpicture}\\
+      {\scriptsize Балістична модель домінує (0{,}91)}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{Серце роботи. UKF — нелінійність; IMM — режими. Чесно: маневрові режими майже не активуються — це обмеження й напрям розвитку.}
+
+% ---------------------------------------------------------------- 10
+\begin{frame}{Результати}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \centering\footnotesize
+      \begin{tabular}{@{}lr@{}}
+        \toprule
+        \textbf{Показник} & \textbf{Значення} \\
+        \midrule
+        Кадрів із підтвердженим м'ячем & $82{,}1\%$ \\
+        Унікальних треків / розіграшів  & $30 / 30$ \\
+        Перетинів сітки                 & $95$ \\
+        Сумарний шлях м'яча             & $1331{,}2$~м \\
+        Макс. швидкість                 & $39{,}6$~м/с \\
+        Макс. висота                    & $5{,}06$~м \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \bignum{60 $\rightarrow$ 6}{стрибків глибини $>$5~м}\\[6pt]
+      \bignum{123 $\rightarrow$ 20}{фрагментацій треку}\\[6pt]
+      \bignum{$g_{\text{відн}}\approx 9{,}1$~м/с$^2$}{підтверджує адекватність 3D}\\[6pt]
+      \bignum{46–52 FPS}{реальний час}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{Ліворуч — статистика гри. Праворуч — головний інженерний результат: захист глибини. g≈9.1 доводить геометричну коректність.}
+
+% ---------------------------------------------------------------- 11
+\begin{frame}{Демонстрація роботи}
+  \centering
+  \begin{columns}[c]
+    \begin{column}{0.33\textwidth}\centering
+      \includegraphics[width=\linewidth]{4_2_overlay_coasting.png}\\{\scriptsize Коастинг}
+    \end{column}
+    \begin{column}{0.33\textwidth}\centering
+      \includegraphics[width=\linewidth]{4_3_overlay_ballistic.png}\\{\scriptsize Балістична траєкторія}
+    \end{column}
+    \begin{column}{0.33\textwidth}\centering
+      \includegraphics[width=\linewidth]{4_4_overlay_farside.png}\\{\scriptsize Дальня зона}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  {\scriptsize Повне відео роботи системи демонструється окремо (плеєр).}
+\end{frame}
+\note{Тут вмикаю коротке демо-відео (~22 с) окремим плеєром. Показати трасу, HUD, [COASTING].}
+
+% ---------------------------------------------------------------- 12
+\begin{frame}{Висновки}
+  \begin{itemize}
+    \item Побудовано \alert{наскрізний автоматичний} конвеєр відео~$\rightarrow$~3D-статистика у реальному часі.
+    \item Детектор YOLO26: mAP@0.5~$=0{,}857$ на власному датасеті.
+    \item Розроблено й кількісно підтверджено \alert{комплекс механізмів захисту глибини}
+          (стрибки $60\to6$, фрагментація $123\to20$).
+    \item $g_{\text{відн}}\approx 9{,}1$~м/с$^2$ — геометрична адекватність траєкторій.
+    \item \textbf{Практична цінність:} автоматична просторово-часова статистика гри з однієї камери.
+  \end{itemize}
+  \vspace{2pt}
+  {\footnotesize Напрям розвитку: активація маневрових режимів IMM, розширення покриття детектора на дальній бік.}
+\end{frame}
+\note{Підсумок 4 результати + практична цінність + чесний напрям розвитку.}
+
+% ---------------------------------------------------------------- 13
+\begin{frame}[standout]
+  Дякую за увагу!\\[6pt]
+  {\normalsize Готовий відповісти на запитання}
+\end{frame}
+
+\end{document}
