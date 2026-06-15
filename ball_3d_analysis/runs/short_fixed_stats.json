@@ -1,0 +1,302 @@
+{
+  "source": "runs/short_fixed_tracks.jsonl",
+  "video": "../data/videos/Japan_vs_Poland_short.mp4",
+  "fps": 50.0,
+  "dt": 0.02,
+  "frames_total": 7317,
+  "frames_confirmed": 6006,
+  "frames_valid_inplay": 3864,
+  "coverage_confirmed": 0.8208282082820828,
+  "coverage_valid": 0.5280852808528085,
+  "unique_tracks": 30,
+  "time_near_s": 43.34,
+  "time_far_s": 33.94,
+  "time_near_pct": 0.5608178053830227,
+  "time_far_pct": 0.4391821946169772,
+  "speed_mean_ms": 10.325563249684654,
+  "speed_median_ms": 9.090993168323225,
+  "speed_max_ms": 39.644143218666336,
+  "speed_p95_ms": 23.050246537323183,
+  "speed_mean_kmh": 37.17202769886475,
+  "speed_max_kmh": 142.7189155871988,
+  "speed_max_frame": 5918,
+  "height_mean_m": 2.9030789572535327,
+  "height_max_m": 5.06209046042663,
+  "height_max_frame": 6398,
+  "frames_above_net": 2677,
+  "net_crossings": 95,
+  "rallies": [
+    {
+      "tid": 1,
+      "frame_start": 3,
+      "frame_end": 58,
+      "duration_s": 1.06,
+      "z_min": 3.475358071131108,
+      "z_max": 9.748865651801776,
+      "max_speed_ms": 26.40410740851241
+    },
+    {
+      "tid": 2,
+      "frame_start": 60,
+      "frame_end": 72,
+      "duration_s": 0.2,
+      "z_min": 3.629934823707386,
+      "z_max": 7.167058569219308,
+      "max_speed_ms": 14.600765611446466
+    },
+    {
+      "tid": 2,
+      "frame_start": 141,
+      "frame_end": 625,
+      "duration_s": 8.52,
+      "z_min": -1.3415167069672118,
+      "z_max": 17.363325384803595,
+      "max_speed_ms": 32.439129125339434
+    },
+    {
+      "tid": 5,
+      "frame_start": 892,
+      "frame_end": 920,
+      "duration_s": 0.48,
+      "z_min": 15.209514344995979,
+      "z_max": 19.919693810478158,
+      "max_speed_ms": 15.804459315677603
+    },
+    {
+      "tid": 6,
+      "frame_start": 959,
+      "frame_end": 1190,
+      "duration_s": 3.8200000000000003,
+      "z_min": 2.257417727763077,
+      "z_max": 19.594093640646154,
+      "max_speed_ms": 23.203632755117077
+    },
+    {
+      "tid": 9,
+      "frame_start": 1196,
+      "frame_end": 1208,
+      "duration_s": 0.22,
+      "z_min": 3.3429207225816726,
+      "z_max": 7.9836649865346025,
+      "max_speed_ms": 19.841476026993558
+    },
+    {
+      "tid": 10,
+      "frame_start": 1226,
+      "frame_end": 1449,
+      "duration_s": 3.38,
+      "z_min": 2.118137918273679,
+      "z_max": 16.08183203310037,
+      "max_speed_ms": 21.74144575285632
+    },
+    {
+      "tid": 13,
+      "frame_start": 1491,
+      "frame_end": 1798,
+      "duration_s": 5.54,
+      "z_min": 3.8082639725700784,
+      "z_max": 19.53228425895318,
+      "max_speed_ms": 25.12015560719538
+    },
+    {
+      "tid": 19,
+      "frame_start": 2137,
+      "frame_end": 2370,
+      "duration_s": 4.2,
+      "z_min": -1.459465603522178,
+      "z_max": 15.112342888782052,
+      "max_speed_ms": 19.22262848717336
+    },
+    {
+      "tid": 21,
+      "frame_start": 2569,
+      "frame_end": 2763,
+      "duration_s": 2.18,
+      "z_min": 0.7044278390599864,
+      "z_max": 19.787115675945415,
+      "max_speed_ms": 31.064561727384213
+    },
+    {
+      "tid": 22,
+      "frame_start": 2858,
+      "frame_end": 3158,
+      "duration_s": 4.98,
+      "z_min": 3.451718553299139,
+      "z_max": 16.411664319588372,
+      "max_speed_ms": 30.46458933491544
+    },
+    {
+      "tid": 25,
+      "frame_start": 3248,
+      "frame_end": 3385,
+      "duration_s": 2.68,
+      "z_min": 1.9088158766537897,
+      "z_max": 13.237661001385504,
+      "max_speed_ms": 22.24255177371077
+    },
+    {
+      "tid": 27,
+      "frame_start": 3396,
+      "frame_end": 3439,
+      "duration_s": 0.76,
+      "z_min": 2.7555665584688804,
+      "z_max": 9.752921619403832,
+      "max_speed_ms": 24.092982409909197
+    },
+    {
+      "tid": 27,
+      "frame_start": 3493,
+      "frame_end": 3630,
+      "duration_s": 2.5,
+      "z_min": 1.2091578486994305,
+      "z_max": 12.32323901766931,
+      "max_speed_ms": 22.69756852153183
+    },
+    {
+      "tid": 31,
+      "frame_start": 3632,
+      "frame_end": 3804,
+      "duration_s": 2.54,
+      "z_min": 2.8911064773534534,
+      "z_max": 18.43399181547792,
+      "max_speed_ms": 39.24454509309841
+    },
+    {
+      "tid": 31,
+      "frame_start": 3856,
+      "frame_end": 4557,
+      "duration_s": 12.58,
+      "z_min": 1.4981588023093018,
+      "z_max": 17.97929305263633,
+      "max_speed_ms": 31.972185995490783
+    },
+    {
+      "tid": 35,
+      "frame_start": 4585,
+      "frame_end": 4612,
+      "duration_s": 0.5,
+      "z_min": -1.9458446484768979,
+      "z_max": 1.3640826190258424,
+      "max_speed_ms": 12.612182732313546
+    },
+    {
+      "tid": 37,
+      "frame_start": 4839,
+      "frame_end": 5147,
+      "duration_s": 4.68,
+      "z_min": 4.887501806187966,
+      "z_max": 19.364072384834518,
+      "max_speed_ms": 21.987245723055665
+    },
+    {
+      "tid": 38,
+      "frame_start": 5153,
+      "frame_end": 5168,
+      "duration_s": 0.26,
+      "z_min": 16.69047109198437,
+      "z_max": 19.485131570678103,
+      "max_speed_ms": 16.09593891249089
+    },
+    {
+      "tid": 40,
+      "frame_start": 5170,
+      "frame_end": 5262,
+      "duration_s": 1.04,
+      "z_min": 5.0265716224731065,
+      "z_max": 19.989906409151814,
+      "max_speed_ms": 32.19128601073199
+    },
+    {
+      "tid": 42,
+      "frame_start": 5455,
+      "frame_end": 5535,
+      "duration_s": 0.96,
+      "z_min": -1.2154309480855172,
+      "z_max": 4.857305687333184,
+      "max_speed_ms": 17.14754715745669
+    },
+    {
+      "tid": 44,
+      "frame_start": 5548,
+      "frame_end": 5587,
+      "duration_s": 0.72,
+      "z_min": -1.430640950567248,
+      "z_max": 19.207565120763544,
+      "max_speed_ms": 32.63404696903428
+    },
+    {
+      "tid": 44,
+      "frame_start": 5646,
+      "frame_end": 5714,
+      "duration_s": 1.3,
+      "z_min": 6.917657626296891,
+      "z_max": 15.408832241683074,
+      "max_speed_ms": 16.67852358105826
+    },
+    {
+      "tid": 48,
+      "frame_start": 5730,
+      "frame_end": 5987,
+      "duration_s": 2.72,
+      "z_min": 1.3713848045021708,
+      "z_max": 19.96905632942106,
+      "max_speed_ms": 39.644143218666336
+    },
+    {
+      "tid": 48,
+      "frame_start": 6043,
+      "frame_end": 6325,
+      "duration_s": 3.3200000000000003,
+      "z_min": 2.6194524922665146,
+      "z_max": 19.897002334806395,
+      "max_speed_ms": 35.712423175489235
+    },
+    {
+      "tid": 50,
+      "frame_start": 6332,
+      "frame_end": 6485,
+      "duration_s": 1.8,
+      "z_min": -1.1703352361729915,
+      "z_max": 19.991581426382016,
+      "max_speed_ms": 21.971941811174673
+    },
+    {
+      "tid": 52,
+      "frame_start": 6638,
+      "frame_end": 6724,
+      "duration_s": 1.44,
+      "z_min": 13.99211225002566,
+      "z_max": 19.203041593227567,
+      "max_speed_ms": 11.259258771560589
+    },
+    {
+      "tid": 52,
+      "frame_start": 6796,
+      "frame_end": 6929,
+      "duration_s": 1.3,
+      "z_min": 3.8230393525115614,
+      "z_max": 18.478973654632327,
+      "max_speed_ms": 29.8124096372401
+    },
+    {
+      "tid": 56,
+      "frame_start": 6939,
+      "frame_end": 6988,
+      "duration_s": 1.0,
+      "z_min": 5.027875354676835,
+      "z_max": 8.626854547760072,
+      "max_speed_ms": 11.244249775826612
+    },
+    {
+      "tid": 58,
+      "frame_start": 7008,
+      "frame_end": 7017,
+      "duration_s": 0.2,
+      "z_min": 8.968795486246819,
+      "z_max": 9.864441084298956,
+      "max_speed_ms": 16.081670214569748
+    }
+  ],
+  "rally_count": 30,
+  "ball_path_length_m": 1331.2448855836546
+}
