@@ -1,1 +1,2 @@
 /home/var-roman/Desktop/my_projects/diploma_project/training_models/models/main_model_april.pt filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
